@@ -4,12 +4,13 @@ import copy
 from pydantic import BaseModel, Field
 import numpy as np
 
-
+# todo：添加场景分类：运动、日常
 class FashionItem(BaseModel):
     item_id: Optional[int] = Field(
         default=None,
         description="Unique ID of the item, mapped to `id` in the ItemLoader"
     )
+    # 上下装分类
     category: Optional[str] = Field(
         default="",
         description="Category of the item"
@@ -34,15 +35,17 @@ class FashionItem(BaseModel):
     class Config:
         arbitrary_types_allowed = True
 
-    
+# 兼容性查询
 class FashionCompatibilityQuery(BaseModel):
     outfit: List[Union[FashionItem, int]] = Field(
         default_factory=list,
         description="List of fashion items"
     )
 
+# 互补性查询
 class FashionComplementaryQuery(BaseModel):
     outfit: List[Union[FashionItem, int]] = Field(
+        # 其实只有一件
         default_factory=list,
         description="List of fashion items"
     )
@@ -50,8 +53,7 @@ class FashionComplementaryQuery(BaseModel):
         default="",
         description="Category of the target outfit"
     )
-    
-    
+       
 class FashionCompatibilityData(TypedDict):
     label: Union[
         int, 

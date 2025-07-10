@@ -94,7 +94,7 @@ def compute(rank: int, world_size: int, args: Any):
     model = load_model(model_type=args.model_type, checkpoint=args.checkpoint)
     model.eval()
     logger.info(f'Model Loaded')
-    
+
     all_ids, all_embeddings = [], []
     with torch.no_grad():
         for batch in tqdm(item_dataloader):

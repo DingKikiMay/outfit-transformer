@@ -53,6 +53,7 @@ def run(args):
     items = polyvore.PolyvoreItemDataset(
         args.polyvore_dir, metadata=metadata, load_image=True
     )
+
     num_pages = len(items) // ITEM_PER_PAGE
     # 根据页码返回对应页的商品列表
     def get_items(page):
@@ -210,7 +211,7 @@ def run(args):
             else:
                 state_my_items.append(
                     datatypes.FashionItem(
-                        id=None,
+                        item_id=None,
                         image=item_image, 
                         description=item_description,
                         category=item_category,
