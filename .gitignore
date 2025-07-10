@@ -171,3 +171,5 @@ cython_debug/
 
 # Torch Model
 *.pth
+
+!datasets/*.py
