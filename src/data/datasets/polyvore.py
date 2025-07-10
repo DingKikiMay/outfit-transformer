@@ -44,7 +44,7 @@ POLYVORE_IMAGE_DATA_PATH = (
 def load_metadata(dataset_dir):
     metadata = {}
     with open(
-        POLYVORE_METADATA_PATH.format(dataset_dir=dataset_dir), 'r'
+        POLYVORE_METADATA_PATH.format(dataset_dir=dataset_dir), 'r', encoding='utf-8'
     ) as f:
         metadata_ = json.load(f)
         for item in metadata_:
@@ -139,7 +139,7 @@ def load_task_data(dataset_dir, dataset_type, task, dataset_split):
             dataset_type=dataset_type,
             dataset_task=task,
             dataset_split=dataset_split
-        ), 'r'
+        ), 'r', encoding='utf-8'
     ) as f:
         data = json.load(f)
         
@@ -152,7 +152,7 @@ def load_set_data(dataset_dir, dataset_type, dataset_split):
             dataset_dir=dataset_dir,
             dataset_type=dataset_type,
             dataset_split=dataset_split
-        ), 'r'
+        ), 'r', encoding='utf-8'
     ) as f:
         data = json.load(f)
         
@@ -320,8 +320,8 @@ class PolyvoreItemDataset(Dataset):
         
 if __name__ == '__main__':
     # Test the dataset
-    # todo: 2025-07-09
-    dataset_dir = "/home/owj0421/datasets/polyvore"
+    # 修改了数据路径，从/home/owj0421/datasets/polyvore 到 ./src/data/datasets/polyvore
+    dataset_dir = "./src/data/datasets/polyvore"
     
     dataset = PolyvoreCompatibilityDataset(
         dataset_dir,
