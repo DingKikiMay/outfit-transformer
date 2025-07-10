@@ -98,8 +98,6 @@ def compute(rank: int, world_size: int, args: Any):
     all_ids, all_embeddings = [], []
     with torch.no_grad():
         for batch in tqdm(item_dataloader):
-            if args.demo and len(all_embeddings) > 10:
-                break
             # 调用模型生成嵌入
             if dist.get_world_size() > 1:
                 embeddings = model.module.precompute_clip_embedding(batch)  # (batch_size, d_embed)
