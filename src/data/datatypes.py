@@ -23,6 +23,7 @@ class FashionItem(BaseModel):
         default="",
         description="Description of the item"
     )
+    # 元数据中的其他内容
     metadata: Optional[dict] = Field(
         default_factory=dict,
         description="Additional metadata for the item"
@@ -36,6 +37,7 @@ class FashionItem(BaseModel):
         arbitrary_types_allowed = True
 
 # 兼容性查询
+# 一个 outfit 的所有单品，可以是 FashionItem 类型，也可以是 item_id
 class FashionCompatibilityQuery(BaseModel):
     outfit: List[Union[FashionItem, int]] = Field(
         default_factory=list,
@@ -55,6 +57,7 @@ class FashionComplementaryQuery(BaseModel):
     )
        
 class FashionCompatibilityData(TypedDict):
+    # 兼容性标签（1=兼容，0=不兼容）
     label: Union[
         int, 
         List[int]
@@ -66,10 +69,12 @@ class FashionCompatibilityData(TypedDict):
     
     
 class FashionFillInTheBlankData(TypedDict):
+    # 里面包含已知部分 outfit 和目标类别
     query: Union[
         FashionComplementaryQuery,
         List[FashionComplementaryQuery]
     ]
+    # 正确答案在 candidates 里的索引
     label: Union[
         int,
         List[int]
@@ -81,6 +86,7 @@ class FashionFillInTheBlankData(TypedDict):
     
     
 class FashionTripletData(TypedDict):
+    # 里面包含已知部分 outfit 和目标类别
     query: Union[
         FashionComplementaryQuery,
         List[FashionComplementaryQuery]

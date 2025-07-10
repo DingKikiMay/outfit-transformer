@@ -40,7 +40,7 @@ POLYVORE_TASK_DATA_PATH = (
 POLYVORE_IMAGE_DATA_PATH = (
     "{dataset_dir}/images/{item_id}.jpg"
 )
-
+# 过滤，保留“上装”“下装”
 def load_metadata(dataset_dir):
     metadata = {}
     with open(
@@ -74,7 +74,7 @@ def load_embedding_dict(dataset_dir):
     
     return all_embeddings_dict
 
-
+# 根据指定的id读取图片
 def _load_image(dataset_dir, item_id, size=(224, 224)):
     image_path = POLYVORE_IMAGE_DATA_PATH.format(
         dataset_dir=dataset_dir,
@@ -176,6 +176,7 @@ class PolyvoreCompatibilityDataset(Dataset):
     ):
         self.dataset_dir = dataset_dir
         self.metadata = metadata if metadata else load_metadata(dataset_dir)
+        # todo:对data进行过滤处理，只保留“上装”“下装”
         self.data = load_task_data(
             dataset_dir, dataset_type, 'compatibility', dataset_split
         )
