@@ -23,7 +23,7 @@ import wandb
 
 from . import vectorstore
 from ..data import collate_fn
-from ..data.datasets import polyvore
+from ..data.datasets import polyvore_utils as polyvore  
 from ..models.load import load_model
 from ..utils.distributed_utils import cleanup, setup
 from ..utils.logger import get_logger

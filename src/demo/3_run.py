@@ -11,7 +11,7 @@ import pathlib
 from .vectorstore import FAISSVectorStore
 from ..models.load import load_model
 from ..data import datatypes
-from ..data.datasets import polyvore
+from ..data.datasets import polyvore_utils as polyvore
 
 SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
 LOGS_DIR = SRC_DIR / 'logs'

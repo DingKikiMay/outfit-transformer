@@ -11,7 +11,7 @@ from tqdm import tqdm
 import wandb
 
 from ..data import collate_fn
-from ..data.datasets import polyvore
+from ..data.datasets import polyvore_utils as polyvore
 from ..evaluation.metrics import compute_cp_scores
 from ..models.load import load_model
 from ..utils.utils import seed_everything

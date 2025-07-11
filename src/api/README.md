@@ -6,7 +6,6 @@
 
 ## 功能特性
 
-- 🖼️ **融合搜索**: 支持图片+文本描述+场景筛选的智能搜索
 - 👕 **互补推荐**: 根据用户已有商品推荐互补单品
 - 📊 **兼容性评分**: 计算搭配的兼容性分数
 - 🏷️ **场景筛选**: 支持按场景（日常/运动）筛选商品
@@ -25,6 +24,7 @@ pip install fastapi uvicorn python-multipart requests pillow torch numpy faiss-c
 ### 2. 数据准备
 
 确保以下文件存在：
+
 - `./datasets/polyvore/item_metadata.json` - 商品元数据
 - `./datasets/polyvore/precomputed_rec_embeddings/` - 预计算的embedding
 - `./checkpoints/best_model.pth` - 训练好的模型
@@ -50,11 +50,13 @@ python src/api/fashion_api.py
 ### 基础接口
 
 #### 健康检查
+
 ```http
 GET /health
 ```
 
 **响应示例:**
+
 ```json
 {
   "status": "healthy",
@@ -65,11 +67,13 @@ GET /health
 ```
 
 #### 获取类别
+
 ```http
 GET /categories
 ```
 
 **响应示例:**
+
 ```json
 {
   "success": true,
@@ -78,11 +82,13 @@ GET /categories
 ```
 
 #### 获取场景
+
 ```http
 GET /scenes
 ```
 
 **响应示例:**
+
 ```json
 {
   "success": true,
@@ -93,17 +99,20 @@ GET /scenes
 ### 核心功能接口
 
 #### 融合搜索
+
 ```http
 POST /search/fusion
 ```
 
 **请求参数:**
+
 - `image` (file): 上传的图片文件
 - `description` (string, optional): 文本描述
 - `scene_filter` (string, optional): 场景筛选 (casual/sport)
 - `top_k` (int, optional): 返回结果数量，默认4
 
 **响应示例:**
+
 ```json
 {
   "success": true,
@@ -123,11 +132,13 @@ POST /search/fusion
 ```
 
 #### 互补商品搜索
+
 ```http
 POST /search/complementary
 ```
 
 **请求体:**
+
 ```json
 {
   "user_items": [
@@ -145,6 +156,7 @@ POST /search/complementary
 ```
 
 **响应示例:**
+
 ```json
 {
   "success": true,
@@ -164,11 +176,13 @@ POST /search/complementary
 ```
 
 #### 兼容性评分
+
 ```http
 POST /compatibility/score
 ```
 
 **请求体:**
+
 ```json
 {
   "outfit_items": [
@@ -191,6 +205,7 @@ POST /compatibility/score
 ```
 
 **响应示例:**
+
 ```json
 {
   "success": true,
@@ -202,11 +217,13 @@ POST /compatibility/score
 ### 辅助接口
 
 #### 获取商品信息
+
 ```http
 GET /items/{item_id}
 ```
 
 **响应示例:**
+
 ```json
 {
   "success": true,
@@ -221,11 +238,13 @@ GET /items/{item_id}
 ```
 
 #### 获取统计信息
+
 ```http
 GET /stats
 ```
 
 **响应示例:**
+
 ```json
 {
   "success": true,
@@ -259,7 +278,7 @@ def fusion_search_example():
     img_bytes = io.BytesIO()
     img.save(img_bytes, format='JPEG')
     img_bytes.seek(0)
-    
+  
     # 发送请求
     files = {'image': ('test.jpg', img_bytes, 'image/jpeg')}
     data = {
@@ -267,10 +286,10 @@ def fusion_search_example():
         'scene_filter': 'casual',
         'top_k': 4
     }
-    
+  
     response = requests.post('http://localhost:8000/search/fusion', 
                            files=files, data=data)
-    
+  
     if response.status_code == 200:
         results = response.json()
         print(f"找到 {results['total_count']} 个匹配商品")
@@ -286,10 +305,10 @@ def complementary_search_example():
             "scene": ["casual"]
         }
     ]
-    
+  
     response = requests.post('http://localhost:8000/search/complementary',
                            json={"user_items": user_items, "top_k": 4})
-    
+  
     if response.status_code == 200:
         results = response.json()
         print(f"推荐 {results['total_count']} 个互补商品")
@@ -300,10 +319,10 @@ def compatibility_score_example():
         {"description": "白色T恤", "category": "tops", "scene": ["casual"]},
         {"description": "蓝色牛仔裤", "category": "bottoms", "scene": ["casual"]}
     ]
-    
+  
     response = requests.post('http://localhost:8000/compatibility/score',
                            json={"outfit_items": outfit})
-    
+  
     if response.status_code == 200:
         result = response.json()
         print(f"搭配兼容性分数: {result['score']:.3f}")
@@ -319,12 +338,12 @@ async function fusionSearch(imageFile, description, sceneFilter) {
     formData.append('description', description);
     formData.append('scene_filter', sceneFilter);
     formData.append('top_k', 4);
-    
+  
     const response = await fetch('http://localhost:8000/search/fusion', {
         method: 'POST',
         body: formData
     });
-    
+  
     const result = await response.json();
     return result;
 }
@@ -342,7 +361,7 @@ async function complementarySearch(userItems, sceneFilter) {
             top_k: 4
         })
     });
-    
+  
     const result = await response.json();
     return result;
 }
@@ -358,7 +377,7 @@ async function compatibilityScore(outfitItems) {
             outfit_items: outfitItems
         })
     });
-    
+  
     const result = await response.json();
     return result;
 }
@@ -437,24 +456,26 @@ uvicorn.run(
 ### 常见问题
 
 1. **模型加载失败**
+
    - 检查模型文件路径
    - 确认模型文件完整性
-
 2. **数据加载失败**
+
    - 检查数据集路径
    - 确认数据文件格式
-
 3. **FAISS索引错误**
+
    - 检查embedding文件
    - 确认索引类型匹配
-
 4. **内存不足**
+
    - 减少batch size
    - 使用更小的模型
 
 ### 日志查看
 
 API服务会输出详细的日志信息，包括：
+
 - 模型加载状态
 - 请求处理过程
 - 错误堆栈信息
@@ -462,7 +483,8 @@ API服务会输出详细的日志信息，包括：
 ## 更新日志
 
 ### v1.0.0
+
 - 初始版本发布
 - 支持融合搜索、互补推荐、兼容性评分
 - 提供完整的REST API接口
-- 包含Python和JavaScript客户端示例 
+- 包含Python和JavaScript客户端示例
