@@ -4,7 +4,9 @@ import copy
 from pydantic import BaseModel, Field
 import numpy as np
 
-# todo：添加场景分类：运动、日常
+# 场景类型定义
+SCENE_TYPES = ['casual', 'sport']  # 日常、运动
+
 class FashionItem(BaseModel):
     item_id: Optional[int] = Field(
         default=None,
@@ -22,6 +24,11 @@ class FashionItem(BaseModel):
     description: Optional[str] = Field(
         default="",
         description="Description of the item"
+    )
+    # 场景标签列表
+    scene: Optional[List[str]] = Field(
+        default_factory=lambda: ['casual'],
+        description="List of scenes the item is suitable for (casual, sport)"
     )
     # 元数据中的其他内容
     metadata: Optional[dict] = Field(

@@ -20,6 +20,9 @@ from typing import List
 from PIL import Image
 from typing import Dict, Any, Optional
 
+# import ChineseCLIPTextEncoder相关
+from transformers import ChineseCLIPModel, ChineseCLIPProcessor
+
 from ...utils.model_utils import freeze_model, mean_pooling
     
 class BaseTextEncoder(nn.Module, ABC):
@@ -173,4 +176,72 @@ class CLIPTextEncoder(BaseTextEncoder):
             batch_size, -1, self.d_embed
         )
             
+        return text_embeddings
+
+
+class ChineseCLIPTextEncoder(BaseTextEncoder):
+
+    def __init__(
+        self,
+        model_name_or_path: str = 'OFA-Sys/chinese-clip-vit-base-patch16',
+        freeze: bool = True
+    ):
+        super().__init__()
+        
+        # 加载全模型
+        self.model = ChineseCLIPModel.from_pretrained(model_name_or_path)
+        
+        # 提取文本模型和投影层
+        self.text_model = self.model.text_model
+        self.text_projection = self.model.text_projection
+
+        # 冻结参数
+        if freeze:
+            freeze_model(self.text_model)
+            freeze_model(self.text_projection)
+        
+        # 使用 ChineseCLIPProcessor 中的 tokenizer
+        processor = ChineseCLIPProcessor.from_pretrained(model_name_or_path)
+        self.tokenizer = processor.tokenizer  # 等价于 BertTokenizer
+
+    @property
+    def d_embed(self) -> int:
+        return self.text_projection.out_features
+
+    @torch.no_grad()
+    def _forward(
+        self,
+        texts: List[List[str]],
+        tokenizer_kargs: Dict[str, Any] = None
+    ):
+        batch_size = len(texts)
+        texts = sum(texts, [])  # Flatten
+
+        # tokenizer参数
+        tokenizer_kargs = tokenizer_kargs if tokenizer_kargs is not None else {
+            'max_length': 64,
+            'padding': 'max_length',
+            'truncation': True
+        }
+        tokenizer_kargs['return_tensors'] = 'pt'
+
+        # Tokenize
+        inputs = self.tokenizer(
+            text=texts,
+            **tokenizer_kargs
+        )
+
+        # 转到设备
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+        # 获取文本向量（使用 pooler_output）
+        outputs = self.text_model(**inputs)
+        pooled_output = outputs.pooler_output  # [batch_size, hidden_dim]
+
+        # 投影成文本特征（对齐图像特征）
+        text_embeddings = self.text_projection(pooled_output)  # [batch_size, projection_dim]
+
+        # 恢复 batch 次结构
+        text_embeddings = text_embeddings.view(batch_size, -1, self.d_embed)
+
         return text_embeddings

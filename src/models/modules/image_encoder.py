@@ -25,6 +25,10 @@ from ...utils.model_utils import freeze_model, mean_pooling
 
 import numpy as np
 
+# import ChineseCLIPImageEncoder相关
+from transformers import ChineseCLIPModel, ChineseCLIPProcessor
+
+
 class BaseImageEncoder(nn.Module, ABC):
     
     def __init__(self):
@@ -124,7 +128,7 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         
         return image_embeddings
     
-    
+# 实现基于 CLIP 的图像编码器
 class CLIPImageEncoder(BaseImageEncoder):
     
     def __init__(
@@ -176,3 +180,60 @@ class CLIPImageEncoder(BaseImageEncoder):
         )
 
         return image_embeddings
+
+# 实现基于 ChineseCLIP 的图像编码器
+class ChineseCLIPImageEncoder(BaseImageEncoder):
+
+    def __init__(
+        self,
+        model_name_or_path: str = 'OFA-Sys/chinese-clip-vit-base-patch16',
+        freeze: bool = True
+    ):
+        super().__init__()
+        # 加载完整模型
+        self.model = ChineseCLIPModel.from_pretrained(model_name_or_path)
+        
+        # 只保留视觉相关部分
+        self.vision_model = self.model.vision_model
+        self.visual_projection = self.model.visual_projection
+
+        if freeze:
+            freeze_model(self.vision_model)
+            freeze_model(self.visual_projection)
+        
+        # 图像预处理器
+        self.processor = ChineseCLIPProcessor.from_pretrained(model_name_or_path)
+        self.processor_image = self.processor.image_processor  # 显式取图像处理部分
+
+    @property
+    def image_size(self) -> int:
+        return self.processor_image.size['shortest_edge']
+
+    @property
+    def d_embed(self) -> int:
+        return self.visual_projection.out_features  # 投影维度通常为 512
+
+    @torch.no_grad()
+    def _forward(
+        self, 
+        images: List[List[np.ndarray]],
+        processor_kargs: Dict[str, Any] = None
+    ):
+        batch_size = len(images)
+        images = sum(images, [])
+        
+        processor_kargs = processor_kargs if processor_kargs is not None else {}
+        processor_kargs['return_tensors'] = 'pt'
+
+        # 使用 ChineseCLIP 的图像处理器
+        transformed = self.processor_image(
+            images=images, **processor_kargs
+        ).to(self.device)
+
+        # 编码器 + 投影层
+        vision_outputs = self.vision_model(**transformed)
+        image_embeds = self.visual_projection(vision_outputs.pooler_output)
+
+        image_embeds = image_embeds.view(batch_size, -1, self.d_embed)
+
+        return image_embeds

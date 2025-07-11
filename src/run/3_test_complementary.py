@@ -67,17 +67,24 @@ def validation(args):
     
     pbar = tqdm(test_dataloader, desc=f'[Test] Fill in the Blank')
     all_preds, all_labels = [], []
+    # 遍历数据集，批量推理与评估
     for i, data in enumerate(pbar):
+        # 如果demo模式，只测试前2个样本
         if args.demo and i > 2:
             break
+        # 推理，获取query和candidates的embedding
         batched_q_emb = model(data['query'], use_precomputed_embedding=True).unsqueeze(1) # (batch_sz, 1, embedding_dim)
         batched_c_embs = model(sum(data['candidates'], []), use_precomputed_embedding=True) # (batch_sz * 4, embedding_dim)
         batched_c_embs = batched_c_embs.view(-1, 4, batched_c_embs.shape[1]) # (batch_sz, 4, embedding_dim)
         
+        # 计算query和candidates的距离
         dists = torch.norm(batched_q_emb - batched_c_embs, dim=-1) # (batch_sz, 4)
+        # 获取距离最小的candidates作为预测结果
         preds = torch.argmin(dists, dim=-1) # (batch_sz,)
+        # 获取真实标签
         labels = torch.tensor(data['label']).cuda()
 
+        # 累积结果
         # Accumulate Results
         all_preds.append(preds.detach())
         all_labels.append(labels.detach())

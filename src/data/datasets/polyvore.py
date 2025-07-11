@@ -29,16 +29,16 @@ POLYVORE_PRECOMPUTED_CLIP_EMBEDDING_DIR = (
     "{dataset_dir}/precomputed_clip_embeddings"
 )
 POLYVORE_METADATA_PATH = (
-    "{dataset_dir}/item_metadata.json"
+    "{dataset_dir}/filtered_item_metadata.json"
 )
 POLYVORE_SET_DATA_PATH = (
-    "{dataset_dir}/{dataset_type}/{dataset_split}.json"
+    "{dataset_dir}/{dataset_type}/{dataset_split}_filtered.json"
 )
 POLYVORE_TASK_DATA_PATH = (
-    "{dataset_dir}/{dataset_type}/{dataset_task}/{dataset_split}.json"
+    "{dataset_dir}/{dataset_type}/{dataset_task}/{dataset_split}_filtered.json"
 )
 POLYVORE_IMAGE_DATA_PATH = (
-    "{dataset_dir}/images/{item_id}.jpg"
+    "{dataset_dir}/filtered_images/{item_id}.jpg"
 )
 # 过滤，保留“上装”“下装”
 def load_metadata(dataset_dir):
@@ -124,6 +124,8 @@ def load_item(dataset_dir, metadata, item_id, load_image: bool = False, embeddin
     return FashionItem(
         item_id=metadata_['item_id'],
         category=metadata_['semantic_category'],
+        # 添加场景
+        scene=metadata_['scene'],
         image=_load_image(dataset_dir, item_id) if load_image else None,
         # description: 商品标题或URL名称
         description=metadata_['title'] if metadata_['title'] else metadata_['url_name'],
