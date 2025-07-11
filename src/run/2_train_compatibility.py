@@ -121,31 +121,43 @@ def train_step(
     args, epoch, logger, wandb_run,
     model, optimizer, scheduler, loss_fn, dataloader
 ):
+    # 1. 设置模型为训练模式（启用dropout/bn等）
     model.train()  
     pbar = tqdm(dataloader, desc=f'Train Epoch {epoch+1}/{args.n_epochs}', disable=(rank != 0))
-    
+    # 2. tqdm进度条，只有主进程(rank==0)显示
+    # 3. 初始化损失、预测和标签
     all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
+    # 4. 遍历每个batch
     for i, data in enumerate(pbar):
+        # 5. 如果demo模式，只训练前3个batch
         if args.demo and i > 2:
             break
+        # 6. 获取query和label
         queries = data['query']
         labels = torch.tensor(data['label'], dtype=torch.float32).to(rank)
-        
+        # 7. 前向推理，得到预测分数（兼容性分数），并去掉多余维度
         preds = model(queries, use_precomputed_embedding=True).squeeze(1)
-        
+        # 8. 计算损失
         loss = loss_fn(y_true=labels, y_prob=preds) / args.accumulation_steps
+        # 9. 反向传播
         loss.backward()
+        # 10. 梯度裁剪
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        # 11. 如果累积步数达到args.accumulation_steps，则更新模型参数
         if (i + 1) % args.accumulation_steps == 0:
+            # 12. 更新模型参数
             optimizer.step()
+            # 13. 清空梯度
             optimizer.zero_grad()
+            # 14. 更新学习率
             scheduler.step()
-            
+        # 15. 累积结果
         # Accumulate Results
         all_loss += loss.item() * args.accumulation_steps / len(dataloader)
+        # 16. 保存本批次预测和标签
         all_preds.append(preds.detach())
         all_labels.append(labels.detach())
-
+        # 17. 计算本批次得分    
         # Logging 
         score = compute_cp_scores(all_preds[-1], all_labels[-1])
         logs = {
@@ -154,16 +166,19 @@ def train_step(
             'lr': scheduler.get_last_lr()[0] if scheduler else args.lr,
             **score
         }
+        # 18. 更新进度条
         pbar.set_postfix(**logs)
+        # 19. 如果wandb_key存在，则记录日志
         if args.wandb_key and rank == 0:
             logs = {f'train_{k}': v for k, v in logs.items()}
             wandb_run.log(logs)
     
-
+    # 20. 将所有预测和标签拼接起来
     all_preds = torch.cat(all_preds).to(rank)
     all_labels = torch.cat(all_labels).to(rank)
-
+    # 21. 收集所有进程的结果
     gathered_loss, gathered_preds, gathered_labels = gather_results(all_loss, all_preds, all_labels)
+    # 22. 计算所有进程的平均损失和得分
     output = {'loss': gathered_loss.item(), **compute_cp_scores(gathered_preds, gathered_labels)} if rank == 0 else {}
     logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End {output}')
 
@@ -238,6 +253,7 @@ def train(
     logger.info(f'Logger Setup Completed')
     
     # Dataloaders
+    # 调用setup_dataloaders，构建训练和验证集的DataLoader，支持分布式采样。日志记录数据加载完成。
     train_dataloader, valid_dataloader = setup_dataloaders(rank, world_size, args)
     logger.info(f'Dataloaders Setup Completed')
     
@@ -270,27 +286,30 @@ def train(
             args, epoch, logger, wandb_run,
             model, loss_fn, valid_dataloader
         )
-        
+        # 构建模型保存目录和文件名
         checkpoint_dir = CHECKPOINT_DIR / project_name
         os.makedirs(checkpoint_dir, exist_ok=True)
         checkpoint_path = os.path.join(checkpoint_dir, f'epoch_{epoch+1}.pth')
-            
+        # 只在主进程(rank==0)保存模型权重和配置到epoch_x.pth 
         if rank == 0:
             torch.save({
                 'config': model.module.cfg.__dict__ if world_size > 1 else model.cfg.__dict__,
                 'model': model.state_dict()
             }, checkpoint_path)
-            
+            # 保存得分到epoch_x_score.json
             score_path = os.path.join(checkpoint_dir, f'epoch_{epoch+1}_score.json')
             with open(score_path, 'w') as f:
                 score = {**train_logs, **valid_logs}
                 json.dump(score, f, indent=4)
             logger.info(f'Checkpoint saved at {checkpoint_path}')
-            
+        # 分布式同步，所有进程等待主进程保存好模型     
         dist.barrier()
+        # 加载模型权重
         map_location = f'cuda:{rank}' if torch.cuda.is_available() else 'cpu'
         state_dict = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
+        # 加载模型权重
         model.load_state_dict(state_dict['model'])
+        # 日志记录模型加载完成
         logger.info(f'Checkpoint loaded from {checkpoint_path}')
         
     cleanup()
