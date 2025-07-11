@@ -122,126 +122,40 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         return text_embeddings
     
     
-class CLIPTextEncoder(BaseTextEncoder):
-    
-    def __init__(
-        self,
-        model_name_or_path: str = 'patrickjohncyh/fashion-clip',
-        freeze: bool = True
-    ):
-        super().__init__()
-        self.model = CLIPTextModelWithProjection.from_pretrained(
-            model_name_or_path, weights_only=False
-        )
-        self.model.eval()
-        if freeze:
-            freeze_model(self.model)
-        self.tokenizer = CLIPTokenizer.from_pretrained(
-           model_name_or_path
-        )
-        
-    @property
-    def d_embed(self) -> int:
-        return self.model.config.projection_dim
-    
-    @torch.no_grad()
-    def _forward(
-        self, 
-        texts: List[List[str]],
-        tokenizer_kargs: Dict[str, Any] = None
-    ) -> Tensor:
-        batch_size = len(texts)
-        texts: List[str] = sum(texts, [])
-        
-        tokenizer_kargs = tokenizer_kargs if tokenizer_kargs is not None else {
-            'max_length': 64,
-            'padding': 'max_length',
-            'truncation': True,
-        }
-        tokenizer_kargs['return_tensors'] = 'pt'
-        
-        inputs = self.tokenizer(
-            text=texts, **tokenizer_kargs
-        )
-        
-        inputs = {
-            key: value.to(self.device) for key, value in inputs.items()
-        }
-        
-        text_embeddings = self.model(
-            **inputs
-        ).text_embeds
-        
-        text_embeddings = text_embeddings.view(
-            batch_size, -1, self.d_embed
-        )
-            
-        return text_embeddings
-
-
 class ChineseCLIPTextEncoder(BaseTextEncoder):
-
     def __init__(
         self,
         model_name_or_path: str = 'OFA-Sys/chinese-clip-vit-base-patch16',
         freeze: bool = True
     ):
         super().__init__()
-        
-        # 加载全模型
         self.model = ChineseCLIPModel.from_pretrained(model_name_or_path)
-        
-        # 提取文本模型和投影层
-        self.text_model = self.model.text_model
-        self.text_projection = self.model.text_projection
-
-        # 冻结参数
+        self.model.eval()
         if freeze:
-            freeze_model(self.text_model)
-            freeze_model(self.text_projection)
-        
-        # 使用 ChineseCLIPProcessor 中的 tokenizer
-        processor = ChineseCLIPProcessor.from_pretrained(model_name_or_path)
-        self.tokenizer = processor.tokenizer  # 等价于 BertTokenizer
-
+            freeze_model(self.model)
+        self.processor = ChineseCLIPProcessor.from_pretrained(model_name_or_path)
+        self.tokenizer = self.processor.tokenizer
     @property
     def d_embed(self) -> int:
-        return self.text_projection.out_features
-
+        return self.model.text_projection.out_features  # 通常为512
     @torch.no_grad()
     def _forward(
         self,
         texts: List[List[str]],
         tokenizer_kargs: Dict[str, Any] = None
     ):
+        # 有多少个 outfit
         batch_size = len(texts)
-        texts = sum(texts, [])  # Flatten
-
-        # tokenizer参数
+        texts = sum(texts, [])
         tokenizer_kargs = tokenizer_kargs if tokenizer_kargs is not None else {
             'max_length': 64,
             'padding': 'max_length',
             'truncation': True
         }
         tokenizer_kargs['return_tensors'] = 'pt'
-
-        # Tokenize
-        inputs = self.tokenizer(
-            text=texts,
-            **tokenizer_kargs
-        )
-
-        # 转到设备
+        inputs = self.tokenizer(text=texts, **tokenizer_kargs)
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-        # 获取文本向量（使用 pooler_output）
-        outputs = self.text_model(**inputs)
-        pooled_output = outputs.pooler_output  # [batch_size, hidden_dim]
-
-        # 投影成文本特征（对齐图像特征）
-        text_embeddings = self.text_projection(pooled_output)  # [batch_size, projection_dim]
-
-        # 恢复 batch 次结构
-        text_embeddings = text_embeddings.view(batch_size, -1, self.d_embed)
-
+        outputs = self.model.get_text_features(**inputs)
+        text_embeddings = outputs.view(batch_size, -1, self.d_embed)
+        # shape 为 [batch, seq, d_embed]，seq 为每个outfit的文本数量，d_embed 为 embedding 维度
         return text_embeddings

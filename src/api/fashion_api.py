@@ -21,7 +21,7 @@ import uvicorn
 from ..models.load import load_model
 from ..data.datatypes import FashionItem, FashionComplementaryQuery, FashionCompatibilityQuery, SCENE_TYPES
 from ..demo.vectorstore import FAISSVectorStore
-from ..data.datasets import polyvore
+from ..data.datasets import polyvore_utils as polyvore
 
 # 配置
 POLYVORE_DIR = "./src/data/datasets/polyvore"
@@ -39,6 +39,19 @@ indexer = None
 metadata = None
 
 # Pydantic模型定义
+class FusionSearchRequest(BaseModel):
+    """融合搜索请求模型"""
+    description: Optional[str] = None
+    scene_filter: Optional[str] = None
+    top_k: int = 4
+
+class FusionSearchResponse(BaseModel):
+    """融合搜索响应模型"""
+    success: bool
+    message: str
+    results: List[Dict[str, Any]]
+    total_count: int
+
 class ComplementarySearchRequest(BaseModel):
     """互补搜索请求模型"""
     user_items: List[Dict[str, Any]]
@@ -254,6 +267,111 @@ async def get_scenes():
         "success": True,
         "scenes": SCENE_TAGS
     }
+
+@app.post("/search/fusion", response_model=FusionSearchResponse)
+async def fusion_search(
+    image: UploadFile = File(...),
+    description: Optional[str] = Form(None),
+    scene_filter: Optional[str] = Form(None),
+    top_k: int = Form(4)
+):
+    """
+    融合搜索接口
+    支持图片+描述+场景的融合搜索
+    """
+    try:
+        # 验证输入
+        if not image:
+            raise HTTPException(status_code=400, detail="请上传图片")
+        
+        if scene_filter and scene_filter not in SCENE_TAGS:
+            raise HTTPException(status_code=400, detail=f"无效的场景标签，可选值: {SCENE_TAGS}")
+        
+        print(f"[API] 融合搜索请求 - 描述: {description}, 场景: {scene_filter}, top_k: {top_k}")
+        
+        # 读取图片
+        image_data = await image.read()
+        pil_image = Image.open(io.BytesIO(image_data))
+        
+        # 第一步：根据场景筛选商品
+        filtered_indices = filter_items_by_scene(scene_filter)
+        print(f"[API] 筛选后商品数量: {len(filtered_indices)}")
+        
+        if not filtered_indices:
+            return FusionSearchResponse(
+                success=True,
+                message="筛选后没有符合条件的商品",
+                results=[],
+                total_count=0
+            )
+        
+        # 第二步：创建筛选后的FAISS索引
+        filtered_indexer = create_filtered_faiss_index(filtered_indices)
+        
+        if filtered_indexer is None:
+            print("[API] 创建筛选索引失败，使用原始索引")
+            filtered_indexer = indexer
+        
+        # 第三步：创建融合的FashionItem
+        desc = description if description else "fashion item"
+        
+        fusion_item = FashionItem(
+            item_id=None,
+            image=pil_image,
+            description=desc,
+            category='tops',
+            scene=['casual']
+        )
+        
+        # 第四步：构建查询
+        query = FashionComplementaryQuery(
+            outfit=[fusion_item],
+            category='tops'
+        )
+        
+        # 第五步：生成融合查询向量
+        with torch.no_grad():
+            query_embedding = model.embed_query(
+                query=[query],
+                use_precomputed_embedding=False
+            ).detach().cpu().numpy().tolist()
+        
+        # 第六步：在筛选后的索引中进行KNN检索
+        search_results = filtered_indexer.search(
+            embeddings=query_embedding,
+            k=min(top_k, len(filtered_indices))
+        )[0]
+        
+        # 第七步：构建搜索结果
+        results = []
+        for result in search_results:
+            if isinstance(result, (list, tuple)) and len(result) >= 2:
+                score, item_id = result
+                item = items.get_item_by_id(item_id)
+                if item:
+                    results.append({
+                        'id': str(item_id),
+                        'description': item.description,
+                        'category': item.category,
+                        'scene': item.scene,
+                        'score': float(score),
+                        'image_base64': image_to_base64(item.image) if item.image else None
+                    })
+                    if len(results) >= top_k:
+                        break
+        
+        print(f"[API] 融合搜索完成，返回 {len(results)} 个结果")
+        
+        return FusionSearchResponse(
+            success=True,
+            message="搜索成功",
+            results=results,
+            total_count=len(results)
+        )
+        
+    except Exception as e:
+        print(f"[API] 融合搜索失败: {e}")
+        raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
 
 @app.post("/search/complementary", response_model=FusionSearchResponse)
 async def complementary_search(request: ComplementarySearchRequest):

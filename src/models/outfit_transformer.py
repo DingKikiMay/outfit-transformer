@@ -1,6 +1,6 @@
 from torch import nn
 from dataclasses import dataclass, field
-from typing import List, Tuple, Dict, Any, Union, Literal, Optional
+from typing import List, Tuple, Dict, Any, Union, Literal, Optional, Sequence
 from torch import Tensor
 from PIL import Image
 import cv2
@@ -12,19 +12,23 @@ import pathlib
 from ..data.datatypes import (
     FashionCompatibilityQuery, FashionComplementaryQuery, FashionItem
 )
-from .modules.encoder import ItemEncoder
+from .modules.encoder import ChineseCLIPItemEncoder
 from ..utils.model_utils import get_device
 
 @dataclass
 class OutfitTransformerConfig:
     padding: Literal['longest', 'max_length'] = 'longest'
     max_length: int = 16
+    # 是否截断超长序列，保证输入不会超出 max_length
     truncation: bool = True
     
-    item_enc_text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    item_enc_dim_per_modality: int = 128
+    # 统一使用 Chinese-CLIP 作为图文编码器
+    item_enc_model_name: str = "OFA-Sys/chinese-clip-vit-base-patch16"  # Chinese-CLIP 模型名
+    item_enc_dim_per_modality: int = 512  # Chinese-CLIP 输出维度
+    # 是否对编码器输出做归一化（L2 norm），常用于多模态对齐和检索
     item_enc_norm_out: bool = True
-    aggregation_method: Literal['concat', 'sum', 'mean'] = 'concat'
+    # 多模态融合方法，可选 concat、sum、mean
+    aggregation_method: Literal['concat', 'sum', 'mean'] = 'concat'  # 若用concat，d_model=1024
     
     transformer_n_head: int = 16 # Original: 16
     transformer_d_ffn: int = 2024 # Original: Unknown
@@ -32,7 +36,7 @@ class OutfitTransformerConfig:
     transformer_dropout: float = 0.3 # Original: Unknown
     transformer_norm_out: bool = False
     
-    d_embed: int = 128
+    d_embed: int = 128  # transformer输出embedding维度，可自定义
 
 
 class OutfitTransformer(nn.Module):
@@ -40,21 +44,23 @@ class OutfitTransformer(nn.Module):
     def __init__(self, cfg: Optional[OutfitTransformerConfig] = None):
         super().__init__()
         self.cfg = cfg if cfg is not None else OutfitTransformerConfig()
+        # 初始化多模态编码器
         self._init_item_enc()
+        # 初始化 transformer 编码器
         self._init_style_enc()
+        # 初始化可学习参数
         self._init_variables()
         
     def _init_item_enc(self):
-        """Builds the outfit encoder using configuration parameters."""
-        self.item_enc = ItemEncoder(
-            text_model_name=self.cfg.item_enc_text_model_name,
-            enc_dim_per_modality=self.cfg.item_enc_dim_per_modality,
+        """使用 Chinese-CLIP 作为 outfit encoder，支持中文和图片多模态输入。"""
+        self.item_enc = ChineseCLIPItemEncoder(
+            model_name=self.cfg.item_enc_model_name,
             enc_norm_out=self.cfg.item_enc_norm_out,
             aggregation_method=self.cfg.aggregation_method
         )
     
     def _init_style_enc(self):
-        """Builds the transformer encoder using configuration parameters."""
+        """构建 transformer encoder，输入维度与 Chinese-CLIP 输出一致。"""
         style_enc_layer = nn.TransformerEncoderLayer(
             d_model=self.item_enc.d_embed,
             nhead=self.cfg.transformer_n_head,
@@ -70,7 +76,6 @@ class OutfitTransformer(nn.Module):
             enable_nested_tensor=False
         )
         self.predict_ffn = nn.Sequential(
-            # nn.LayerNorm(self.item_enc.d_embed),
             nn.Dropout(self.cfg.transformer_dropout),
             nn.Linear(self.item_enc.d_embed, 1),
             nn.Sigmoid()
@@ -84,25 +89,30 @@ class OutfitTransformer(nn.Module):
         # self.image_query = Image.open(self.cfg.query_img_path).resize(image_size)
         self.image_pad = Image.new("RGB", image_size)
         self.text_pad = ''
-        
+        # 任务嵌入，用于区分任务类型（兼容性预测、查询补全、单品嵌入）
         self.task_emb = nn.Parameter(
             torch.randn(self.item_enc.d_embed // 2) * 0.02, requires_grad=True
         )
+        # 兼容性预测嵌入，用于区分兼容性预测和查询补全
         self.predict_emb = nn.Parameter(
             torch.randn(self.item_enc.d_embed // 2) * 0.02, requires_grad=True
         )
+        # 查询补全嵌入，用于区分查询补全和单品嵌入
         self.embed_emb = nn.Parameter(
             torch.randn(self.item_enc.d_embed // 2) * 0.02, requires_grad=True
         )
+        # 填充嵌入，用于填充超长序列
         self.pad_emb = nn.Parameter(
             torch.randn(self.item_enc.d_embed) * 0.02, requires_grad=True
         )
     
     def _get_max_length(self, sequences):
+        # 如果padding为max_length，则返回max_length
         if self.cfg.padding == 'max_length':
             return self.cfg.max_length
+        # 否则返回最长的序列长度
         max_length = max(len(seq) for seq in sequences)
-        
+        # 如果truncation为True，则返回最长的序列长度和max_length中的较小值
         return min(self.cfg.max_length, max_length) if self.cfg.truncation else max_length
 
     def _pad_sequences(self, sequences, pad_value, max_length):
@@ -157,11 +167,13 @@ class OutfitTransformer(nn.Module):
     def predict_score(self, query: List[FashionCompatibilityQuery], use_precomputed_embedding: bool = False) -> Tensor:
         outfits = [query_.outfit for query_ in query]
         if use_precomputed_embedding:
-            assert all([item_.embedding is not None for item_ in sum(outfits, [])])
-            embs_of_inputs = [[item_.embedding for item_ in outfit] for outfit in outfits]
+            embs_of_inputs = []
+            for outfit in outfits:
+                embs_of_inputs.append([
+                    item_.embedding for item_ in outfit if hasattr(item_, 'embedding') and item_.embedding is not None
+                ])
             embs_of_inputs, mask = self._pad_and_mask_for_embs(embs_of_inputs)
         else:
-            outfits = [query_.outfit for query_ in query]
             images, texts, mask = self._pad_and_mask_for_outfits(outfits)
             embs_of_inputs = self.item_enc(images, texts)
             
@@ -182,11 +194,13 @@ class OutfitTransformer(nn.Module):
         return scores
     
     def embed_query(self, query: List[FashionComplementaryQuery], use_precomputed_embedding: bool=False) -> Tensor:
-        # q_items = [[FashionItem(category=i.category, image=self.image_query, description=i.category)] for i in query]
         outfits = [query_.outfit for query_ in query]
         if use_precomputed_embedding:
-            assert all([item_.embedding is not None for item_ in sum(outfits, [])])
-            embs_of_inputs = [[item_.embedding for item_ in outfit] for outfit in outfits]
+            embs_of_inputs = []
+            for outfit in outfits:
+                embs_of_inputs.append([
+                    item_.embedding for item_ in outfit if hasattr(item_, 'embedding') and item_.embedding is not None
+                ])
             embs_of_inputs, mask = self._pad_and_mask_for_embs(embs_of_inputs)
         else:
             images, texts, mask = self._pad_and_mask_for_outfits(outfits)
@@ -208,8 +222,10 @@ class OutfitTransformer(nn.Module):
 
     def embed_item(self, item: List[FashionItem], use_precomputed_embedding: bool=False) -> Tensor:
         if use_precomputed_embedding:
-            assert all([item_.embedding is not None for item_ in item])
-            embs_of_inputs = [[item_.embedding] for item_ in item]
+            embs_of_inputs = []
+            for item_ in item:
+                if hasattr(item_, 'embedding') and item_.embedding is not None:
+                    embs_of_inputs.append([item_.embedding])
             embs_of_inputs, mask = self._pad_and_mask_for_embs(embs_of_inputs)
         else:
             outfits = [[item_] for item_ in item]
@@ -226,14 +242,13 @@ class OutfitTransformer(nn.Module):
         inputs: List[Union[FashionCompatibilityQuery, FashionComplementaryQuery, FashionItem]],
         *args, **kwargs
     ) -> Tensor:
-        if isinstance(inputs[0], FashionCompatibilityQuery):
-            return self.predict_score(inputs, *args, **kwargs)
-        
-        elif isinstance(inputs[0], FashionComplementaryQuery):
-            return self.embed_query(inputs, *args, **kwargs)
-        
-        elif isinstance(inputs[0], FashionItem):
-            return self.embed_item(inputs, *args, **kwargs)
+        # 更健壮的类型判断，确保传递类型正确
+        if all(isinstance(x, FashionCompatibilityQuery) for x in inputs):
+            return self.predict_score(list(inputs), *args, **kwargs)
+        elif all(isinstance(x, FashionComplementaryQuery) for x in inputs):
+            return self.embed_query(list(inputs), *args, **kwargs)
+        elif all(isinstance(x, FashionItem) for x in inputs):
+            return self.embed_item(list(inputs), *args, **kwargs)
         else:
             raise ValueError("Invalid input type.")
         

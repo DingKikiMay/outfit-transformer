@@ -127,6 +127,7 @@ def train_step(
     # 2. tqdm进度条，只有主进程(rank==0)显示
     # 3. 初始化损失、预测和标签
     all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
+    pbar = tqdm(dataloader, desc=f'Train Epoch {epoch+1}/{args.n_epochs}', disable=(rank != 0))
     # 4. 遍历每个batch
     for i, data in enumerate(pbar):
         # 5. 如果demo模式，只训练前3个batch

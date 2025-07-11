@@ -11,12 +11,12 @@ import os
 
 # Import custom modules
 from ...data import datatypes
-from .image_encoder import Resnet18ImageEncoder, CLIPImageEncoder
-from .text_encoder import HuggingFaceTextEncoder, CLIPTextEncoder
+from .image_encoder import Resnet18ImageEncoder, ChineseCLIPImageEncoder
+from .text_encoder import HuggingFaceTextEncoder, ChineseCLIPTextEncoder
 from ...utils.model_utils import freeze_model, mean_pooling, aggregate_embeddings
 from transformers import AutoModel, AutoTokenizer, AutoProcessor
 
-
+# 多模态（图文）编码器
 class ItemEncoder(nn.Module):
     def __init__(
         self, 
@@ -32,11 +32,10 @@ class ItemEncoder(nn.Module):
         self._build_encoders(model_name)
     
     def _build_encoders(self, model_name):
-        self.image_enc = Resnet18ImageEncoder(
-            embedding_size=self.enc_dim_per_modality,
+        self.image_enc = ChineseCLIPImageEncoder(
+            model_name_or_path=model_name
         )
-        self.text_enc = HuggingFaceTextEncoder(
-            embedding_size=self.enc_dim_per_modality,
+        self.text_enc = ChineseCLIPTextEncoder(
             model_name_or_path=model_name
         )
         
@@ -71,7 +70,7 @@ class ItemEncoder(nn.Module):
         return encoder_outputs
 
 # 图像和文本特征在同一个语义空间中，更适合多模态任务
-class CLIPItemEncoder(ItemEncoder):
+class ChineseCLIPItemEncoder(ItemEncoder):
     def __init__(
         self, 
         model_name,
@@ -80,15 +79,16 @@ class CLIPItemEncoder(ItemEncoder):
     ):
         super().__init__(
             model_name=model_name,
+            # 默认输出维度为512
             enc_dim_per_modality=512,
             enc_norm_out=enc_norm_out,
             aggregation_method=aggregation_method
         )
     
     def _build_encoders(self, model_name):
-        self.image_enc = CLIPImageEncoder(
+        self.image_enc = ChineseCLIPImageEncoder(
             model_name_or_path=model_name
         )
-        self.text_enc = CLIPTextEncoder(
+        self.text_enc = ChineseCLIPTextEncoder(
             model_name_or_path=model_name
         )
