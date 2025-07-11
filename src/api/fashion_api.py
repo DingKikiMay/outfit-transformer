@@ -24,8 +24,8 @@ from ..demo.vectorstore import FAISSVectorStore
 from ..data.datasets import polyvore
 
 # 配置
-POLYVORE_DIR = "./datasets/polyvore"
-MODEL_CHECKPOINT = "./checkpoints/best_model.pth"
+POLYVORE_DIR = "./src/data/datasets/polyvore"
+MODEL_CHECKPOINT = "./src/data/checkpoints/best_model.pth"
 POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = f"{POLYVORE_DIR}/precomputed_rec_embeddings"
 
 # 服装类别列表
@@ -39,19 +39,6 @@ indexer = None
 metadata = None
 
 # Pydantic模型定义
-class FusionSearchRequest(BaseModel):
-    """融合搜索请求模型"""
-    description: Optional[str] = None
-    scene_filter: Optional[str] = None
-    top_k: int = 4
-
-class FusionSearchResponse(BaseModel):
-    """融合搜索响应模型"""
-    success: bool
-    message: str
-    results: List[Dict[str, Any]]
-    total_count: int
-
 class ComplementarySearchRequest(BaseModel):
     """互补搜索请求模型"""
     user_items: List[Dict[str, Any]]
@@ -268,200 +255,87 @@ async def get_scenes():
         "scenes": SCENE_TAGS
     }
 
-@app.post("/search/fusion", response_model=FusionSearchResponse)
-async def fusion_search(
-    image: UploadFile = File(...),
-    description: Optional[str] = Form(None),
-    scene_filter: Optional[str] = Form(None),
-    top_k: int = Form(4)
-):
-    """
-    融合搜索接口
-    支持图片+描述+场景的融合搜索
-    """
-    try:
-        # 验证输入
-        if not image:
-            raise HTTPException(status_code=400, detail="请上传图片")
-        
-        if scene_filter and scene_filter not in SCENE_TAGS:
-            raise HTTPException(status_code=400, detail=f"无效的场景标签，可选值: {SCENE_TAGS}")
-        
-        print(f"[API] 融合搜索请求 - 描述: {description}, 场景: {scene_filter}, top_k: {top_k}")
-        
-        # 读取图片
-        image_data = await image.read()
-        pil_image = Image.open(io.BytesIO(image_data))
-        
-        # 第一步：根据场景筛选商品
-        filtered_indices = filter_items_by_scene(scene_filter)
-        print(f"[API] 筛选后商品数量: {len(filtered_indices)}")
-        
-        if not filtered_indices:
-            return FusionSearchResponse(
-                success=True,
-                message="筛选后没有符合条件的商品",
-                results=[],
-                total_count=0
-            )
-        
-        # 第二步：创建筛选后的FAISS索引
-        filtered_indexer = create_filtered_faiss_index(filtered_indices)
-        
-        if filtered_indexer is None:
-            print("[API] 创建筛选索引失败，使用原始索引")
-            filtered_indexer = indexer
-        
-        # 第三步：创建融合的FashionItem
-        desc = description if description else "fashion item"
-        
-        fusion_item = FashionItem(
-            item_id=None,
-            image=pil_image,
-            description=desc,
-            category='tops',
-            scene=['casual']
-        )
-        
-        # 第四步：构建查询
-        query = FashionComplementaryQuery(
-            outfit=[fusion_item],
-            category='tops'
-        )
-        
-        # 第五步：生成融合查询向量
-        with torch.no_grad():
-            query_embedding = model.embed_query(
-                query=[query],
-                use_precomputed_embedding=False
-            ).detach().cpu().numpy().tolist()
-        
-        # 第六步：在筛选后的索引中进行KNN检索
-        search_results = filtered_indexer.search(
-            embeddings=query_embedding,
-            k=min(top_k, len(filtered_indices))
-        )[0]
-        
-        # 第七步：构建搜索结果
-        results = []
-        for result in search_results:
-            if isinstance(result, (list, tuple)) and len(result) >= 2:
-                score, item_id = result
-                item = items.get_item_by_id(item_id)
-                if item:
-                    results.append({
-                        'id': str(item_id),
-                        'description': item.description,
-                        'category': item.category,
-                        'scene': item.scene,
-                        'score': float(score),
-                        'image_base64': image_to_base64(item.image) if item.image else None
-                    })
-                    if len(results) >= top_k:
-                        break
-        
-        print(f"[API] 融合搜索完成，返回 {len(results)} 个结果")
-        
-        return FusionSearchResponse(
-            success=True,
-            message="搜索成功",
-            results=results,
-            total_count=len(results)
-        )
-        
-    except Exception as e:
-        print(f"[API] 融合搜索失败: {e}")
-        raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
-
 @app.post("/search/complementary", response_model=FusionSearchResponse)
 async def complementary_search(request: ComplementarySearchRequest):
     """
-    互补商品搜索接口
-    根据用户已有的商品推荐互补商品
+    互补推荐接口：
+    - 用户传入已有单品（如上装/下装），可选描述和场景
+    - 自动推断互补类别
+    - 支持description和scene筛选候选集
+    - 用模型编码图片和文本embedding，融合后送入transformer生成检索embedding
+    - 用FAISS索引检索top_k互补单品，返回图片、描述、类别等信息
     """
     try:
-        if not request.user_items:
-            raise HTTPException(status_code=400, detail="请提供用户商品列表")
-        
-        print(f"[API] 互补搜索请求 - 商品数量: {len(request.user_items)}, 场景: {request.scene_filter}")
-        
-        # 转换为FashionItem对象
-        fashion_items = [create_fashion_item(item) for item in request.user_items]
-        
-        # 自动判断目标推荐类别
-        user_category = fashion_items[0].category if fashion_items else 'tops'
+        global items, indexer, model
+        user_items = request.user_items
+        scene_filter = request.scene_filter
+        top_k = request.top_k
+        # 1. 检查用户单品
+        if not user_items or len(user_items) == 0 or items is None:
+            return FusionSearchResponse(success=False, message="请至少选择一个单品", results=[], total_count=0)
+        user_item = user_items[0]  # 只支持单选
+        user_category = user_item.get('category', None)
+        if user_category not in ['tops', 'bottoms']:
+            return FusionSearchResponse(success=False, message="请选择上装或下装！", results=[], total_count=0)
+        # 2. 自动推断互补类别
         target_category = 'bottoms' if user_category == 'tops' else 'tops'
-        
-        print(f"[API] 用户类别: {user_category} -> 目标类别: {target_category}")
-        
-        # 第一步：根据类别和场景筛选商品
-        filtered_indices = filter_items_by_scene(request.scene_filter)
-        print(f"[API] 筛选后商品数量: {len(filtered_indices)}")
-        
-        if not filtered_indices:
-            return FusionSearchResponse(
-                success=True,
-                message="筛选后没有符合条件的商品",
-                results=[],
-                total_count=0
-            )
-        
-        # 第二步：创建筛选后的FAISS索引
-        filtered_indexer = create_filtered_faiss_index(filtered_indices)
-        
+        # 3. 按互补类别筛选候选集
+        candidate_indices = [i for i in range(len(items)) if getattr(items.get_item_by_id(i), 'category', None) == target_category]
+        # 4. 如有场合再筛选
+        if scene_filter:
+            candidate_indices = [i for i in candidate_indices if scene_filter in getattr(items.get_item_by_id(i), 'scene', [])]
+        if not candidate_indices:
+            return FusionSearchResponse(success=False, message="没有符合条件的互补单品！", results=[], total_count=0)
+        # 5. 获取用户单品图像embedding
+        user_img = user_item.get('image_base64', None)
+        if user_img:
+            from PIL import Image
+            import base64, io
+            image = Image.open(io.BytesIO(base64.b64decode(user_img)))
+            user_img_emb = model.image_encoder(image)
+        else:
+            user_img_emb = None
+        # 6. 如有description，编码文本embedding
+        comp_description = user_item.get('description', None)
+        if comp_description:
+            text_emb = model.text_encoder([comp_description])
+        else:
+            text_emb = None
+        # 7. 融合embedding
+        if user_img_emb is not None and text_emb is not None:
+            fusion_emb = torch.cat([user_img_emb, text_emb], dim=-1)
+        elif user_img_emb is not None:
+            fusion_emb = user_img_emb
+        elif text_emb is not None:
+            fusion_emb = text_emb
+        else:
+            return FusionSearchResponse(success=False, message="缺少有效的图片或描述embedding", results=[], total_count=0)
+        # 8. 送入transformer生成检索embedding
+        query_emb = model.transformer(fusion_emb).detach().cpu().numpy().tolist()
+        # 9. 创建筛选后的FAISS索引
+        filtered_indexer = create_filtered_faiss_index(candidate_indices) if candidate_indices else None
         if filtered_indexer is None:
-            print("[API] 创建筛选索引失败，使用原始索引")
             filtered_indexer = indexer
-        
-        # 第三步：构建查询
-        query = FashionComplementaryQuery(
-            outfit=fashion_items,
-            category=target_category
-        )
-        
-        # 第四步：生成查询向量
-        with torch.no_grad():
-            query_embedding = model.embed_query(
-                query=[query],
-                use_precomputed_embedding=False
-            ).detach().cpu().numpy().tolist()
-        
-        # 第五步：在筛选后的索引中进行KNN检索
-        search_results = filtered_indexer.search(
-            embeddings=query_embedding,
-            k=min(request.top_k, len(filtered_indices))
-        )[0]
-        
-        # 第六步：构建推荐结果
+        # 10. 检索
+        res = filtered_indexer.search(
+            embeddings=query_emb,
+            k=min(top_k, len(candidate_indices))
+        )[0] if candidate_indices else []
+        # 11. 返回图片、描述、类别等信息
         results = []
-        for result in search_results:
-            if isinstance(result, (list, tuple)) and len(result) >= 2:
-                score, item_id = result
-                item = items.get_item_by_id(item_id)
-                if item:
-                    results.append({
-                        'id': str(item_id),
-                        'description': item.description,
-                        'category': item.category,
-                        'scene': item.scene,
-                        'score': float(score),
-                        'image_base64': image_to_base64(item.image) if item.image else None
-                    })
-                    if len(results) >= request.top_k:
-                        break
-        
-        print(f"[API] 互补搜索完成，返回 {len(results)} 个结果")
-        
-        return FusionSearchResponse(
-            success=True,
-            message="搜索成功",
-            results=results,
-            total_count=len(results)
-        )
-        
+        for score, item_id in res:
+            item = items.get_item_by_id(item_id)
+            if item is not None:
+                results.append({
+                    'id': item_id,
+                    'description': item.description,
+                    'category': item.category,
+                    'scene': item.scene,
+                    'image_base64': image_to_base64(item.image) if item.image else None
+                })
+        return FusionSearchResponse(success=True, message="success", results=results, total_count=len(results))
     except Exception as e:
-        print(f"[API] 互补搜索失败: {e}")
-        raise HTTPException(status_code=500, detail=f"搜索失败: {str(e)}")
+        return FusionSearchResponse(success=False, message=f"Error: {e}", results=[], total_count=0)
 
 @app.post("/compatibility/score", response_model=CompatibilityScoreResponse)
 async def compute_compatibility_score(request: CompatibilityScoreRequest):

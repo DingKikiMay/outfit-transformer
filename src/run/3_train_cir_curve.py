@@ -35,7 +35,7 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument('--model_type', type=str, choices=['original', 'clip'], default='clip')
-    parser.add_argument('--polyvore_dir', type=str, default='./datasets/polyvore')
+    parser.add_argument('--polyvore_dir', type=str, default='./src/data/datasets/polyvore')
     parser.add_argument('--polyvore_type', type=str, choices=['nondisjoint', 'disjoint'], default='nondisjoint')
     parser.add_argument('--batch_sz_per_gpu', type=int, default=64)
     parser.add_argument('--n_workers_per_gpu', type=int, default=4)
