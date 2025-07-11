@@ -46,9 +46,9 @@ def check_dependencies():
 def check_data_files():
     """检查必要的数据文件"""
     required_files = [
-        './datasets/polyvore/item_metadata.json',
-        './datasets/polyvore/precomputed_rec_embeddings/',
-        './checkpoints/best_model.pth'
+        './src/data/datasets/polyvore/item_metadata.json',
+        './src/data/datasets/polyvore/precomputed_rec_embeddings/',
+        './src/checkpoints/best_model.pth'
     ]
     
     missing_files = []
@@ -110,7 +110,7 @@ def start_api_server():
     # 启动服务器
     try:
         import uvicorn
-        from fashion_api import app
+        from .fashion_api import app
         
         print("服务器启动中...")
         print("API文档地址: http://localhost:8000/docs")

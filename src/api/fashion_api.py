@@ -25,7 +25,7 @@ from ..data.datasets import polyvore_utils as polyvore
 
 # 配置
 POLYVORE_DIR = "./src/data/datasets/polyvore"
-MODEL_CHECKPOINT = "./src/data/checkpoints/best_model.pth"
+MODEL_CHECKPOINT = "./checkpoints/best_model.pth"
 POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = f"{POLYVORE_DIR}/precomputed_rec_embeddings"
 
 # 服装类别列表
