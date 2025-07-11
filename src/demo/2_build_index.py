@@ -40,7 +40,7 @@ POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR = "{polyvore_dir}/precomputed_rec_embeddi
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument('--polyvore_dir', type=str, 
-                        default='./datasets/polyvore')
+                        default='./src/data/datasets/polyvore')
     
     return parser.parse_args()
 

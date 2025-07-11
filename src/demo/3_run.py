@@ -39,7 +39,7 @@ def parse_args():
     parser.add_argument('--model_type', type=str, choices=['original', 'clip'],
                         default='clip')
     parser.add_argument('--polyvore_dir', type=str, 
-                        default='./datasets/polyvore')
+                        default='./src/data/datasets/polyvore')
     parser.add_argument('--checkpoint', type=str, 
                         default=None)
     
