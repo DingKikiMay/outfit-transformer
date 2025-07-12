@@ -30,13 +30,13 @@ class OutfitTransformerConfig:
     # 多模态融合方法，可选 concat、sum、mean
     aggregation_method: Literal['concat', 'sum', 'mean'] = 'concat'  # 若用concat，d_model=1024
     
-    transformer_n_head: int = 16 # Original: 16
-    transformer_d_ffn: int = 2024 # Original: Unknown
+    transformer_n_head: int = 16 # 当使用concat时，1024/16=64，当使用其他方法时，512/16=32
+    transformer_d_ffn: int = 4096 # 当使用concat时，1024*4=4096，当使用其他方法时，512*4=2048
     transformer_n_layers: int = 6 # Original: 6
     transformer_dropout: float = 0.3 # Original: Unknown
     transformer_norm_out: bool = False
-    
-    d_embed: int = 128  # transformer输出embedding维度，可自定义
+    # 原本128太小了，现在512
+    d_embed: int = 512  # transformer输出embedding维度，可自定义
 
 
 class OutfitTransformer(nn.Module):
@@ -61,10 +61,20 @@ class OutfitTransformer(nn.Module):
     
     def _init_style_enc(self):
         """构建 transformer encoder，输入维度与 Chinese-CLIP 输出一致。"""
+        # 动态调整前馈网络维度
+        if self.cfg.aggregation_method == 'concat':
+            # 当使用concat时，输入维度是1024，前馈网络应该是4096
+            d_ffn = max(self.cfg.transformer_d_ffn, self.item_enc.d_embed * 4)
+        else:
+            # 当使用sum/mean时，输入维度是512，前馈网络应该是2048
+            d_ffn = max(self.cfg.transformer_d_ffn, self.item_enc.d_embed * 4)
+        
+        print(f"Transformer配置: d_model={self.item_enc.d_embed}, d_ffn={d_ffn}, nhead={self.cfg.transformer_n_head}")
+        
         style_enc_layer = nn.TransformerEncoderLayer(
             d_model=self.item_enc.d_embed,
             nhead=self.cfg.transformer_n_head,
-            dim_feedforward=self.cfg.transformer_d_ffn,
+            dim_feedforward=d_ffn,
             dropout=self.cfg.transformer_dropout,
             batch_first=True,
             norm_first=True,
@@ -88,7 +98,18 @@ class OutfitTransformer(nn.Module):
         image_size = (self.item_enc.image_size, self.item_enc.image_size)
         # self.image_query = Image.open(self.cfg.query_img_path).resize(image_size)
         self.image_pad = Image.new("RGB", image_size)
-        self.text_pad = ''
+        
+        # 获取Chinese-CLIP的pad token
+        try:
+            from transformers import ChineseCLIPProcessor
+            processor = ChineseCLIPProcessor.from_pretrained(self.cfg.item_enc_model_name)
+            self.text_pad = processor.tokenizer.pad_token
+            print(f"使用Chinese-CLIP的pad token: {self.text_pad}")
+        except:
+            # 如果获取失败，使用默认的pad token
+            self.text_pad = '[PAD]'
+            print("使用默认pad token: [PAD]")
+        
         # 任务嵌入，用于区分任务类型（兼容性预测、查询补全、单品嵌入）
         self.task_emb = nn.Parameter(
             torch.randn(self.item_enc.d_embed // 2) * 0.02, requires_grad=True

@@ -9,9 +9,15 @@ import numpy as np
 
 @dataclass
 class OutfitCLIPTransformerConfig(OutfitTransformerConfig):
-    # 只保留 Chinese-CLIP 相关参数
+    """Chinese-CLIP Transformer 专用配置"""
+    # Chinese-CLIP 模型名称
     item_enc_model_name: str = "OFA-Sys/chinese-clip-vit-base-patch16"
+    # Chinese-CLIP 每个模态的输出维度（图像和文本各512维）
     item_enc_dim_per_modality: int = 512
+    # 强制使用 concat 聚合方法，确保维度一致性
+    aggregation_method: str = "concat"
+    # 确保输出维度与Chinese-CLIP兼容
+    d_embed: int = 512
 
 class OutfitCLIPTransformer(OutfitTransformer):
     def __init__(
@@ -19,6 +25,8 @@ class OutfitCLIPTransformer(OutfitTransformer):
         cfg: OutfitCLIPTransformerConfig = OutfitCLIPTransformerConfig()
     ):
         super().__init__(cfg)
+        # 验证配置是否正确适配Chinese-CLIP
+        self.validate_config()
 
     def _init_item_enc(self):
         """使用 Chinese-CLIP 作为 outfit encoder，支持中文和图片多模态输入。"""
