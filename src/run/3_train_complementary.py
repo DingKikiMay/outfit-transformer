@@ -303,6 +303,11 @@ def train(
     loss_fn = InBatchTripletMarginLoss(margin=2.0, reduction='mean')
     logger.info(f'Optimizer and Scheduler Setup Completed')
 
+    # 添加最佳模型跟踪
+    best_valid_score = -float('inf')
+    best_epoch = 0
+    best_model_state = None
+
     # Training Loop
     for epoch in range(args.n_epochs):
         if world_size > 1:
@@ -318,6 +323,18 @@ def train(
             args, epoch, logger, wandb_run,
             model, loss_fn, valid_dataloader
         )
+        
+        # 检查是否为最佳模型
+        valid_score = valid_logs.get('valid_accuracy', -float('inf'))
+        if valid_score > best_valid_score:
+            best_valid_score = valid_score
+            best_epoch = epoch + 1
+            # 保存最佳模型状态
+            if world_size > 1:
+                best_model_state = model.module.state_dict()
+            else:
+                best_model_state = model.state_dict()
+            logger.info(f'新的最佳模型！Epoch {epoch+1}, 验证准确率: {valid_score:.4f}')
         
         checkpoint_dir = CHECKPOINT_DIR / project_name
         os.makedirs(checkpoint_dir, exist_ok=True)
@@ -340,6 +357,31 @@ def train(
         state_dict = torch.load(checkpoint_path, map_location=map_location)
         model.load_state_dict(state_dict['model'])
         logger.info(f'Checkpoint loaded from {checkpoint_path}')
+
+    # 保存最佳模型
+    if best_model_state is not None and rank == 0:
+        best_checkpoint_path = os.path.join(checkpoint_dir, 'best_model.pth')
+        torch.save({
+            'config': model.module.cfg.__dict__ if world_size > 1 else model.cfg.__dict__,
+            'model': best_model_state,
+            'best_epoch': best_epoch,
+            'best_valid_score': best_valid_score
+        }, best_checkpoint_path)
+        
+        # 保存最佳模型信息
+        best_info_path = os.path.join(checkpoint_dir, 'best_model_info.json')
+        with open(best_info_path, 'w') as f:
+            json.dump({
+                'best_epoch': best_epoch,
+                'best_valid_score': best_valid_score,
+                'total_epochs': args.n_epochs
+            }, f, indent=4)
+        
+        logger.info(f'最佳模型已保存！Epoch {best_epoch}, 验证准确率: {best_valid_score:.4f}')
+        logger.info(f'最佳模型路径: {best_checkpoint_path}')
+    
+    # 分布式同步，等待主进程保存最佳模型
+    dist.barrier()
 
     cleanup()
 
