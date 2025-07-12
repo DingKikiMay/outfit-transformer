@@ -129,8 +129,32 @@ def train_step(
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
-        batched_q_emb = model(data['query'], use_precomputed_embedding=True) # (batch_sz, embedding_dim)
-        batched_a_emb = model(data['answer'], use_precomputed_embedding=True) # (batch_sz, embedding_dim)
+        
+        # 过滤掉无效的数据
+        valid_indices = []
+        for j, (query, answer) in enumerate(zip(data['query'], data['answer'])):
+            # 检查query中的outfit是否有有效的embedding
+            valid_query = all(hasattr(item, 'embedding') and item.embedding is not None for item in query.outfit)
+            # 检查answer是否有有效的embedding
+            valid_answer = hasattr(answer, 'embedding') and answer.embedding is not None
+            # 检查outfit是否为空
+            valid_outfit = len(query.outfit) > 0
+            
+            if valid_query and valid_answer and valid_outfit:
+                valid_indices.append(j)
+        
+        if len(valid_indices) == 0:
+            continue  # 跳过这个batch
+            
+        # 只保留有效的数据
+        filtered_query = [data['query'][j] for j in valid_indices]
+        filtered_answer = [data['answer'][j] for j in valid_indices]
+        
+        if len(filtered_query) == 0:
+            continue
+            
+        batched_q_emb = model(filtered_query, use_precomputed_embedding=True) # (batch_sz, embedding_dim)
+        batched_a_emb = model(filtered_answer, use_precomputed_embedding=True) # (batch_sz, embedding_dim)
         
         loss = loss_fn(batched_q_emb, batched_a_emb)
         loss = loss / args.accumulation_steps
@@ -187,13 +211,38 @@ def valid_step(
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
-        batched_q_emb = model(data['query'], use_precomputed_embedding=True).unsqueeze(1) # (batch_sz, 1, embedding_dim)
-        batched_c_embs = model(sum(data['candidates'], []), use_precomputed_embedding=True) # (batch_sz * 4, embedding_dim)
+        
+        # 过滤掉无效的数据
+        valid_indices = []
+        for j, (query, candidates) in enumerate(zip(data['query'], data['candidates'])):
+            # 检查query中的outfit是否有有效的embedding
+            valid_query = all(hasattr(item, 'embedding') and item.embedding is not None for item in query.outfit)
+            # 检查candidates是否有有效的embedding
+            valid_candidates = all(hasattr(item, 'embedding') and item.embedding is not None for item in candidates)
+            # 检查outfit是否为空
+            valid_outfit = len(query.outfit) > 0
+            
+            if valid_query and valid_candidates and valid_outfit:
+                valid_indices.append(j)
+        
+        if len(valid_indices) == 0:
+            continue  # 跳过这个batch
+            
+        # 只保留有效的数据
+        filtered_query = [data['query'][j] for j in valid_indices]
+        filtered_candidates = [data['candidates'][j] for j in valid_indices]
+        filtered_labels = [data['label'][j] for j in valid_indices]
+        
+        if len(filtered_query) == 0:
+            continue
+            
+        batched_q_emb = model(filtered_query, use_precomputed_embedding=True).unsqueeze(1) # (batch_sz, 1, embedding_dim)
+        batched_c_embs = model(sum(filtered_candidates, []), use_precomputed_embedding=True) # (batch_sz * 4, embedding_dim)
         batched_c_embs = batched_c_embs.view(-1, 4, batched_c_embs.shape[1]) # (batch_sz, 4, embedding_dim)
         
         dists = torch.norm(batched_q_emb - batched_c_embs, dim=-1) # (batch_sz, 4)
         preds = torch.argmin(dists, dim=-1) # (batch_sz,)
-        labels = torch.tensor(data['label'], device=rank)
+        labels = torch.tensor(filtered_labels, device=rank)
 
         # Accumulate Results
         all_preds.append(preds.detach())

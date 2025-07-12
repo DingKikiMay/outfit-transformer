@@ -133,14 +133,24 @@ class OutfitTransformer(nn.Module):
         return images, texts, torch.BoolTensor(mask).to(self.device)
     
     def _pad_and_mask_for_embs(self, embs_of_outfits):
-        max_length = self._get_max_length(embs_of_outfits)
-        batch_size = len(embs_of_outfits)
+        # 过滤掉空的outfit
+        valid_embs_of_outfits = []
+        for embs_of_outfit in embs_of_outfits:
+            if len(embs_of_outfit) > 0:
+                valid_embs_of_outfits.append(embs_of_outfit)
+        
+        if len(valid_embs_of_outfits) == 0:
+            # 如果没有有效的outfit，返回一个空的tensor
+            return torch.empty((0, 1, self.item_enc.d_embed), dtype=torch.float, device=self.device), torch.BoolTensor([]).to(self.device)
+        
+        max_length = self._get_max_length(valid_embs_of_outfits)
+        batch_size = len(valid_embs_of_outfits)
 
         embeddings = torch.empty((batch_size, max_length, self.item_enc.d_embed), 
                                  dtype=torch.float, device=self.device)
         mask = []
 
-        for i, embs_of_outfit in enumerate(embs_of_outfits):
+        for i, embs_of_outfit in enumerate(valid_embs_of_outfits):
             embs_of_outfit = torch.tensor(
                 np.array(embs_of_outfit[:max_length]), dtype=torch.float
             ).to(self.device)
