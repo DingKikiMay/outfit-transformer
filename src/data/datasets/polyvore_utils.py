@@ -128,7 +128,7 @@ def load_item(dataset_dir, metadata, item_id, load_image: bool = False, embeddin
         scene=metadata_['scene'],
         image=_load_image(dataset_dir, item_id) if load_image else None,
         # description: 商品标题或URL名称
-        description=metadata_['title'] if metadata_['title'] else metadata_['url_name'],
+        description=metadata_['url_name'] if metadata_['url_name'] else metadata_['title'],
         metadata=metadata_,
         embedding=embedding_dict[item_id] if embedding_dict else None
     )
@@ -178,7 +178,6 @@ class PolyvoreCompatibilityDataset(Dataset):
     ):
         self.dataset_dir = dataset_dir
         self.metadata = metadata if metadata else load_metadata(dataset_dir)
-        # todo:对data进行过滤处理，只保留“上装”“下装”
         self.data = load_task_data(
             dataset_dir, dataset_type, 'compatibility', dataset_split
         )
@@ -242,10 +241,20 @@ class PolyvoreFillInTheBlankDataset(Dataset):
             for item_id in self.data[idx]['question']
         ]
         
+        # 过滤掉无效的items
+        valid_candidates = [item for item in candidates if hasattr(item, 'embedding') and item.embedding is not None]
+        valid_outfit = [item for item in outfit if hasattr(item, 'embedding') and item.embedding is not None]
+        
+        # 如果candidates或outfit无效，使用原始数据
+        if len(valid_candidates) == 0:
+            valid_candidates = candidates
+        if len(valid_outfit) == 0:
+            valid_outfit = outfit
+        
         return FashionFillInTheBlankData(
-            query=FashionComplementaryQuery(outfit=outfit, category=candidates[label].category),
+            query=FashionComplementaryQuery(outfit=valid_outfit, category=valid_candidates[label].category),
             label=label,
-            candidates=candidates
+            candidates=valid_candidates
         )
     
 # 创建一个PolyvoreTripletDataset对象，用于加载和处理Polyvore数据集中的三元组数据
@@ -281,8 +290,24 @@ class PolyvoreTripletDataset(Dataset):
                       self.load_image, self.embedding_dict)
             for item_id in self.data[idx]['item_ids']
         ]
-        answer = items[random.randint(0, len(items) - 1)]
-        outfit = [item for item in items if item != answer]
+        
+        # 过滤掉无效的items（没有embedding的）
+        valid_items = [item for item in items if hasattr(item, 'embedding') and item.embedding is not None]
+        
+        # 如果有效items少于2个，跳过这个样本
+        if len(valid_items) < 2:
+            # 返回一个默认的有效样本，或者抛出异常
+            # 这里我们选择返回第一个样本，让训练步骤来处理
+            if len(valid_items) == 1:
+                answer = valid_items[0]
+                outfit = [answer]  # 使用自己作为outfit，训练时会过滤掉
+            else:
+                # 如果没有有效items，使用原始items
+                answer = items[0] if items else None
+                outfit = items[1:] if len(items) > 1 else [answer]
+        else:
+            answer = valid_items[random.randint(0, len(valid_items) - 1)]
+            outfit = [item for item in valid_items if item != answer]
         
         return FashionTripletData(
             query=FashionComplementaryQuery(outfit=outfit, category=answer.category),
