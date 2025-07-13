@@ -5,9 +5,6 @@ channels:
 dependencies:
   - pip
   - pip:
-    - torch==2.5.0
-    - torchvision==0.20.0
-    - torchaudio==2.5.0
     - pillow==11.0.0
     - transformers==4.48.3
     - scikit-learn
@@ -15,4 +12,4 @@ dependencies:
     - wandb
     - tqdm
     - gradio
-    - opencv-python
+    - opencv-python 

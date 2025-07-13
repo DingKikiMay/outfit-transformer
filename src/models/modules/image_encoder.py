@@ -144,9 +144,15 @@ class ChineseCLIPImageEncoder(BaseImageEncoder):
         self.processor = ChineseCLIPProcessor.from_pretrained(model_name_or_path)
     
     # 返回模型要求的输入图片最短边尺寸（通常为 224），用于外部自动适配图片大小。
+    # @property
+    # def image_size(self) -> int:
+    #     return self.processor.image_processor.size['shortest_edge']  # 返回224
     @property
     def image_size(self) -> int:
-        return self.processor.image_processor.size['shortest_edge']  # 返回224
+        size = self.processor.image_processor.size
+        if isinstance(size, dict):
+            return size.get("shortest_edge") or size.get("height") or size.get("width")
+        return size  # 直接就是 int 的情况
     
     # 返回模型输出的embedding维度（通常为512），用于外部获取模型输出维度。
     @property

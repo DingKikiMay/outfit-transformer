@@ -34,6 +34,7 @@ CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
 RESULT_DIR = SRC_DIR / 'results'
 LOGS_DIR = SRC_DIR / 'logs'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["USE_LIBUV"] = "0"
 
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 os.makedirs(RESULT_DIR, exist_ok=True)

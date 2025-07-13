@@ -31,6 +31,7 @@ from ..utils.utils import seed_everything
 SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
 LOGS_DIR = SRC_DIR / 'logs'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["USE_LIBUV"] = "0"
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 POLYVORE_PRECOMPUTED_CLIP_EMBEDDING_DIR = "{polyvore_dir}/precomputed_clip_embeddings"

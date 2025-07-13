@@ -28,6 +28,11 @@ class OutfitCLIPTransformer(OutfitTransformer):
         # 验证配置是否正确适配Chinese-CLIP
         self.validate_config()
 
+    def validate_config(self):
+       # 可选：对 cfg 的某些字段做检查
+       assert self.cfg.aggregation_method == "concat", \
+           "OutfitCLIPTransformer 目前只支持 concat 聚合方式"
+
     def _init_item_enc(self):
         """使用 Chinese-CLIP 作为 outfit encoder，支持中文和图片多模态输入。"""
         self.item_enc = ChineseCLIPItemEncoder(
