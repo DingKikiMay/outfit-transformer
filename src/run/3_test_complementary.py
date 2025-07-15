@@ -17,9 +17,10 @@ from ..models.load import load_model
 from ..utils.utils import seed_everything
 
 SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
-CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
-RESULT_DIR = SRC_DIR / 'results'
-LOGS_DIR = SRC_DIR / 'logs'
+# 使用数据盘和文件存储，避免系统盘空间不足
+CHECKPOINT_DIR = pathlib.Path('/root/autodl-tmp/checkpoints')  # 数据盘：模型文件
+RESULT_DIR = pathlib.Path('/root/autodl-fs/results')  # 文件存储：结果文件
+LOGS_DIR = pathlib.Path('/root/autodl-fs/logs')  # 文件存储：日志文件
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -100,6 +101,10 @@ def validation(args):
         # 推理，获取query和candidates的embedding
         batched_q_emb = model(filtered_query, use_precomputed_embedding=True).unsqueeze(1) # (batch_sz, 1, embedding_dim)
         batched_c_embs = model(sum(filtered_candidates, []), use_precomputed_embedding=True) # (batch_sz * 4, embedding_dim)
+        if batched_c_embs.shape[0] % 4 != 0:
+            print(f"Warning: candidates数量不是4的倍数，跳过本batch，shape={batched_c_embs.shape}")
+            continue
+
         batched_c_embs = batched_c_embs.view(-1, 4, batched_c_embs.shape[1]) # (batch_sz, 4, embedding_dim)
         
         # 计算query和candidates的距离

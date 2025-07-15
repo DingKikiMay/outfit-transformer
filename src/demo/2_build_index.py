@@ -70,7 +70,7 @@ def load_rec_embedding_dict(dataset_dir):
 def main(args):
     indexer = vectorstore.FAISSVectorStore(
         index_name='rec_index',
-        d_embed=128,
+        d_embed=512,    # transformer输出的融合特征维度512
         faiss_type='IndexFlatIP',
         base_dir=POLYVORE_PRECOMPUTED_REC_EMBEDDING_DIR.format(polyvore_dir=args.polyvore_dir),
     )

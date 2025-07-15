@@ -173,3 +173,8 @@ cython_debug/
 *.pth
 
 !datasets/*.py
+
+*.pth
+*.safetensors
+*.pt
+OFA-Sys/chinese-clip-vit-base-patch16/model.safetensors

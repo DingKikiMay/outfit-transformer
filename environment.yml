@@ -5,6 +5,10 @@ channels:
 dependencies:
   - pip
   - pip:
+    - --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+    - torch==2.3.0
+    - torchvision==0.18.0
+    - torchaudio==2.3.0
     - pillow==11.0.0
     - transformers==4.48.3
     - scikit-learn
@@ -12,4 +16,4 @@ dependencies:
     - wandb
     - tqdm
     - gradio
-    - opencv-python 
+    - opencv-python

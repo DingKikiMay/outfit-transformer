@@ -17,9 +17,10 @@ from ..models.load import load_model
 from ..utils.utils import seed_everything
 
 SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
-CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
-RESULT_DIR = SRC_DIR / 'results'
-LOGS_DIR = SRC_DIR / 'logs'
+# 使用数据盘和文件存储，避免系统盘空间不足
+CHECKPOINT_DIR = pathlib.Path('/root/autodl-tmp/checkpoints')  # 数据盘：模型文件
+RESULT_DIR = pathlib.Path('/root/autodl-fs/results')  # 文件存储：结果文件
+LOGS_DIR = pathlib.Path('/root/autodl-fs/logs')  # 文件存储：日志文件
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)

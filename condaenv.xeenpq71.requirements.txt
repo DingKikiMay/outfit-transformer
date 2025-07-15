@@ -1,0 +1,8 @@
+pillow==11.0.0
+transformers==4.48.3
+scikit-learn
+faiss-cpu
+wandb
+tqdm
+gradio
+opencv-python
