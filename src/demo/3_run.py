@@ -45,7 +45,6 @@ def parse_args():
     
     return parser.parse_args()
 
-
 def run(args):
     
     metadata = polyvore.load_metadata(

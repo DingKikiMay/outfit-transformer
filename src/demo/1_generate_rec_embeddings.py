@@ -142,8 +142,7 @@ def compute(rank: int, world_size: int, args: Any):
     
     # DDP 清理
     cleanup()
-    
-    
+        
 if __name__ == '__main__':
     args = parse_args()
     

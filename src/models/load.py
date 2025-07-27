@@ -43,7 +43,9 @@ def load_model(model_type, checkpoint=None, **cfg_kwargs):
     else:
         raise ValueError(f"Unsupported model_type: {model_type}")
     
-    model.to(rank)
+    # 根据环境自动选择设备
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.to(device)
     
     # DDP 체크포인트와 일반 체크포인트 호환성 처리
     if model_state_dict:
