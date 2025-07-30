@@ -3,6 +3,8 @@
 """
 Flask API服务器 V6
 优化版本：通过HTTP API间接访问数据库，简化请求体，只需要ID即可
+python -m src.api.app_v6
+(base) root@autodl-container-712c49b73d-8821f0fe:~/autodl-tmp# ./ngrok http --url=remotely-one-javelin.ngrok-free.app 6006
 """
 
 import os
@@ -41,10 +43,10 @@ def init_api():
     project_root = Path(__file__).parent.parent.parent
     
     # 默认路径配置（可覆盖）
-    model_path = os.getenv('MODEL_PATH', str(project_root / 'models' / 'cir_best_model.pth'))
-    model_type = os.getenv('MODEL_TYPE', 'clip')
-    faiss_index_path = os.getenv('FAISS_INDEX_PATH', '/root/fashion-ai-project/faiss_index.faiss')
-    api_base_url = os.getenv('BACKEND_API_URL', 'https://m1.apifoxmock.com/m1/6328147-0-default')
+    model_path = str('/root/autodl-tmp/best_path/complementary_clip_cir_experiment_001_best_model.pth')
+    model_type = 'clip'
+    faiss_index_path = '/root/outfit-transformer-api/outfit-transformer/faiss_index.faiss'
+    api_base_url = 'https://cloudawn3d.com/'
     ssl_verify = os.getenv('SSL_VERIFY', 'true').lower() == 'true'  # SSL证书验证开关
     
     # 确保目录存在
@@ -72,27 +74,13 @@ def init_api():
         return False
 
 
-@app.route('/health', methods=['GET'])
-def health_check():
-    """健康检查接口"""
-    if recommendation_api is None:
-        return jsonify({
-            'status': 'error',
-            'message': 'API未初始化'
-        }), 500
-    
-    return jsonify({
-        'status': 'ok',
-        'message': 'API运行正常',
-        'api_info': recommendation_api.get_api_info()
-    })
-
 # 从后端API构建FAISS索引接口（预处理阶段）
 @app.route('/api/build_faiss_index_from_api', methods=['POST'])
 def build_faiss_index_from_api():
     """从后端API构建FAISS索引接口（预处理阶段）"""
     if recommendation_api is None:
         return jsonify({
+            'code': 500,
             'success': False,
             'message': 'API未初始化',
             'data': None
@@ -102,12 +90,9 @@ def build_faiss_index_from_api():
         # 获取请求数据
         data = request.get_json()
         
-        if not data:
-            return jsonify({
-                'success': False,
-                'message': '请求数据为空',
-                'data': None
-            }), 400
+        # 如果请求体为空或None，使用空字典
+        if data is None:
+            data = {}
         
         # 获取参数
         scene = data.get('scene')  # 可选，如果为None则获取所有场景
@@ -121,9 +106,10 @@ def build_faiss_index_from_api():
         valid_count = recommendation_api.build_faiss_index_from_api(scene, save_path)
         
         return jsonify({
+            'code': 200,
             'success': True,
             'message': '分类FAISS索引构建成功',
-            'data': {
+            ''''data': {
                 'scene': scene or 'all',
                 'valid_products': valid_count,
                 'save_path': save_path,
@@ -131,12 +117,14 @@ def build_faiss_index_from_api():
                 'bottoms_index_path': save_path.replace('.faiss', '_bottoms.faiss'),
                 'tops_metadata_path': save_path.replace('.faiss', '_tops_metadata.json'),
                 'bottoms_metadata_path': save_path.replace('.faiss', '_bottoms_metadata.json')
-            }
+            }'''
+            'data': None
         })
         
     except Exception as e:
         logger.error(f"构建FAISS索引过程中出现错误: {e}")
         return jsonify({
+            'code': 500,
             'success': False,
             'message': f'构建FAISS索引失败: {str(e)}',
             'data': None
@@ -148,6 +136,7 @@ def recommend_best_item():
     """推荐最佳单品接口（在线检索阶段，返回top-1）"""
     if recommendation_api is None:
         return jsonify({
+            'code': 500,
             'success': False,
             'message': 'API未初始化',
             'data': None
@@ -159,6 +148,7 @@ def recommend_best_item():
         
         if not data:
             return jsonify({
+                'code': 400,
                 'success': False,
                 'message': '请求数据为空',
                 'data': None
@@ -167,6 +157,7 @@ def recommend_best_item():
         # 验证必需字段
         if 'product_id' not in data:
             return jsonify({
+                'code': 400,
                 'success': False,
                 'message': '缺少必需字段: product_id',
                 'data': None
@@ -183,6 +174,7 @@ def recommend_best_item():
         
         if result is None:
             return jsonify({
+                'code': 404,
                 'success': False,
                 'message': '没有找到合适的推荐单品',
                 'data': None
@@ -194,6 +186,7 @@ def recommend_best_item():
         }
         
         return jsonify({
+            'code': 200,
             'success': True,
             'message': '推荐成功',
             'data': result_data
@@ -201,6 +194,7 @@ def recommend_best_item():
         
     except ValueError as e:
         return jsonify({
+            'code': 400,
             'success': False,
             'message': str(e),
             'data': None
@@ -208,209 +202,9 @@ def recommend_best_item():
     except Exception as e:
         logger.error(f"推荐过程中出现错误: {e}")
         return jsonify({
+            'code': 500,
             'success': False,
             'message': f'推荐失败: {str(e)}',
-            'data': None
-        }), 500
-
-
-@app.route('/api_info', methods=['GET'])
-def get_api_info():
-    """获取API信息"""
-    if recommendation_api is None:
-        return jsonify({
-            'success': False,
-            'message': 'API未初始化',
-            'data': None
-        }), 500
-    
-    return jsonify({
-        'success': True,
-        'message': '获取成功',
-        'data': recommendation_api.get_api_info()
-    })
-
-
-@app.route('/test', methods=['POST'])
-def test_recommendation():
-    """测试推荐接口"""
-    if recommendation_api is None:
-        return jsonify({
-            'success': False,
-            'message': 'API未初始化',
-            'data': None
-        }), 500
-    
-    try:
-        # 示例测试数据（简化版）
-        test_data = {
-            'product_id': 1,
-            'scene': 'casual'
-        }
-        
-        # 构建用户输入
-        user_input = UserInput(
-            product_id=test_data['product_id'],
-            scene=test_data['scene']
-        )
-        
-        # 调用推荐API（全库检索）
-        result = recommendation_api.recommend_best_item(user_input)
-        
-        if result is None:
-            return jsonify({
-                'success': False,
-                'message': '测试失败：没有找到合适的推荐单品',
-                'data': None
-            }), 404
-        
-        # 转换结果格式
-        result_data = {
-            'product_id': result.product_id
-        }
-        
-        return jsonify({
-            'success': True,
-            'message': '测试成功',
-            'data': result_data
-        })
-        
-    except Exception as e:
-        logger.error(f"测试过程中出现错误: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'测试失败: {str(e)}',
-            'data': None
-        }), 500
-
-
-@app.route('/api/test_subcategory', methods=['GET'])
-def test_subcategory():
-    """测试获取子类别接口"""
-    if recommendation_api is None:
-        return jsonify({
-            'success': False,
-            'message': 'API未初始化',
-            'data': None
-        }), 500
-    
-    try:
-        parent_id = request.args.get('parentId', type=int)
-        if parent_id is None:
-            return jsonify({
-                'success': False,
-                'message': '缺少parentId参数',
-                'data': None
-            }), 400
-        
-        subcategory_ids = recommendation_api._get_subcategory_ids(parent_id)
-        
-        return jsonify({
-            'success': True,
-            'message': '获取子类别成功',
-            'data': {
-                'parent_id': parent_id,
-                'subcategory_ids': subcategory_ids,
-                'count': len(subcategory_ids)
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"测试子类别接口出现错误: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'测试失败: {str(e)}',
-            'data': None
-        }), 500
-
-
-@app.route('/api/test_products', methods=['GET'])
-def test_products():
-    """测试获取商品接口"""
-    if recommendation_api is None:
-        return jsonify({
-            'success': False,
-            'message': 'API未初始化',
-            'data': None
-        }), 500
-    
-    try:
-        type_id = request.args.get('typeId', type=int)
-        if type_id is None:
-            return jsonify({
-                'success': False,
-                'message': '缺少typeId参数',
-                'data': None
-            }), 400
-        
-        products = recommendation_api._get_products_by_type_id(type_id, page_size=10)
-        
-        return jsonify({
-            'success': True,
-            'message': '获取商品成功',
-            'data': {
-                'type_id': type_id,
-                'products': products,
-                'count': len(products)
-            }
-        })
-        
-    except Exception as e:
-        logger.error(f"测试商品接口出现错误: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'测试失败: {str(e)}',
-            'data': None
-        }), 500
-
-
-@app.route('/api/test_category_index', methods=['GET'])
-def test_category_index():
-    """测试分类索引接口"""
-    if recommendation_api is None:
-        return jsonify({
-            'success': False,
-            'message': 'API未初始化',
-            'data': None
-        }), 500
-    
-    try:
-        product_id = request.args.get('productId', type=int)
-        if product_id is None:
-            # 返回分类索引统计信息
-            return jsonify({
-                'success': True,
-                'message': '获取分类索引统计成功',
-                'data': {
-                    'total_products': len(recommendation_api.product_category_index),
-                    'tops_count': sum(1 for cat in recommendation_api.product_category_index.values() if cat == 'tops'),
-                    'bottoms_count': sum(1 for cat in recommendation_api.product_category_index.values() if cat == 'bottoms')
-                }
-            })
-        else:
-            # 查询特定商品的分类
-            if product_id in recommendation_api.product_category_index:
-                category = recommendation_api.product_category_index[product_id]
-                return jsonify({
-                    'success': True,
-                    'message': '获取商品分类成功',
-                    'data': {
-                        'product_id': product_id,
-                        'category': category
-                    }
-                })
-            else:
-                return jsonify({
-                    'success': False,
-                    'message': f'商品ID {product_id} 不在分类索引中',
-                    'data': None
-                }), 404
-        
-    except Exception as e:
-        logger.error(f"测试分类索引接口出现错误: {e}")
-        return jsonify({
-            'success': False,
-            'message': f'测试失败: {str(e)}',
             'data': None
         }), 500
 
@@ -423,7 +217,7 @@ if __name__ == '__main__':
     
     # 启动服务器
     host = os.getenv('HOST', '0.0.0.0')
-    port = int(os.getenv('PORT', 5000))
+    port = int(os.getenv('PORT', 6006))
     debug = os.getenv('DEBUG', 'False').lower() == 'true'
     
     # 生产环境建议关闭debug模式

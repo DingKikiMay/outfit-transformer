@@ -1,0 +1,78 @@
+{
+  "metadata": {
+    "12": {
+      "product_id": 12,
+      "description": "adidas originals Parachute 复古运动三条纹梭织降落伞舒适柔软复古运动休闲裤 女款 黑色",
+      "image_url": "https://dabang-1301469943.cos.ap-guangzhou.myqcloud.com/mall/products/output%20%287%29.jpeg",
+      "scene": "sports",
+      "category_id": 14,
+      "category": "bottoms"
+    },
+    "6": {
+      "product_id": 6,
+      "description": "361° 纯色速干透气冰丝户外运动直筒平口运动裤休闲裤 男女同款",
+      "image_url": "https://file.style3d.com/website/Company/77e73047-045e-477f-8fbb-81341ffc79c9/resource/product/models/20250718103812_6138_361%C2%B0%20%E7%BA%AF%E8%89%B2%E9%80%9F%E5%B9%B2%E9%80%8F%E6%B0%94%E5%86%B0%E4%B8%9D%E6%88%B7%E5%A4%96%E8%BF%90%E5%8A%A8%E7%9B%B4%E7%AD%92%E5%B9%B3%E5%8F%A3%E8%BF%90%E5%8A%A8%E8%A3%A4%E4%BC%91%E9%97%B2%E8%A3%A4%20%E7%94%B7%E5%A5%B3%E5%90%8C%E6%AC%BE/thumb.png",
+      "scene": "sports",
+      "category_id": 14,
+      "category": "bottoms"
+    },
+    "11": {
+      "product_id": 11,
+      "description": "MM 复古毛边高腰薄款宽松破洞牛仔短裤 女款",
+      "image_url": "https://dabang-1301469943.cos.ap-guangzhou.myqcloud.com/mall/products/output%20%286%29.jpeg",
+      "scene": "casual",
+      "category_id": 15,
+      "category": "bottoms"
+    },
+    "8": {
+      "product_id": 8,
+      "description": "adidas ESSENTIALS 3-Stripes 运动型格休闲短裤 ",
+      "image_url": "https://dabang-1301469943.cos.ap-guangzhou.myqcloud.com/mall/products/output%20%283%29.jpeg",
+      "scene": "casual",
+      "category_id": 15,
+      "category": "bottoms"
+    },
+    "9": {
+      "product_id": 9,
+      "description": "CAMEL骆驼 城市机能系列 纯色宽松直筒速干轻薄透气休闲短裤 ",
+      "image_url": "https://dabang-1301469943.cos.ap-guangzhou.myqcloud.com/mall/products/output%20%284%29.jpeg",
+      "scene": "sports",
+      "category_id": 15,
+      "category": "bottoms"
+    },
+    "1": {
+      "product_id": 1,
+      "description": "鸿星尔克 综训系列 吸湿排汗Logo纯色宽松速干透气跑步健身训练直筒五分休闲短裤 男女同款 正黑",
+      "image_url": "https://file.style3d.com/website/Company/77e73047-045e-477f-8fbb-81341ffc79c9/resource/product/models/20250718104921_5538_%E9%B8%BF%E6%98%9F%E5%B0%94%E5%85%8B%20%E7%BB%BC%E8%AE%AD%E7%B3%BB%E5%88%97%20%E5%90%B8%E6%B9%BF%E6%8E%92%E6%B1%97Logo%E7%BA%AF%E8%89%B2%E5%AE%BD%E6%9D%BE%E9%80%9F%E5%B9%B2%E9%80%8F%E6%B0%94%E8%B7%91%E6%AD%A5%E5%81%A5%E8%BA%AB%E8%AE%AD%E7%BB%83%E7%9B%B4%E7%AD%92%E4%BA%94%E5%88%86%E4%BC%91%E9%97%B2%E7%9F%AD%E8%A3%A4%20%E7%94%B7%E5%A5%B3%E5%90%8C%E6%AC%BE%20%E6%AD%A3%E9%BB%91/thumb.png",
+      "scene": "casual",
+      "category_id": 15,
+      "category": "bottoms"
+    },
+    "10": {
+      "product_id": 10,
+      "description": "lululemon露露乐蒙 Varsity Swift™ 纯色风琴褶皱网球百褶运动速干带内衬高腰半身休闲短裙 女款 白色",
+      "image_url": "https://dabang-1301469943.cos.ap-guangzhou.myqcloud.com/mall/products/output%20%285%29.jpeg",
+      "scene": "casual",
+      "category_id": 21,
+      "category": "bottoms"
+    }
+  },
+  "id_to_index": {
+    "12": 0,
+    "6": 1,
+    "11": 2,
+    "8": 3,
+    "9": 4,
+    "1": 5,
+    "10": 6
+  },
+  "product_ids": [
+    12,
+    6,
+    11,
+    8,
+    9,
+    1,
+    10
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "metadata": {
+    "5": {
+      "product_id": 5,
+      "description": "GAP 字母印花圆领套头直筒短袖T恤 男女同款",
+      "image_url": "https://file.style3d.com/website/Company/77e73047-045e-477f-8fbb-81341ffc79c9/resource/product/models/20250718104837_6337_GAP%20%E5%AD%97%E6%AF%8D%E5%8D%B0%E8%8A%B1%E5%9C%86%E9%A2%86%E5%A5%97%E5%A4%B4%E7%9B%B4%E7%AD%92%E7%9F%AD%E8%A2%96T%E6%81%A4%20%E7%94%B7%E5%A5%B3%E5%90%8C%E6%AC%BE/thumb.png",
+      "scene": "casual",
+      "category_id": 3,
+      "category": "tops"
+    },
+    "7": {
+      "product_id": 7,
+      "description": "HANDAIWEI 修身收腰弧形下摆纯色短袖 T恤",
+      "image_url": "https://dabang-1301469943.cos.ap-guangzhou.myqcloud.com/mall/products/output%20%282%29.jpeg",
+      "scene": "casual",
+      "category_id": 3,
+      "category": "tops"
+    },
+    "3": {
+      "product_id": 3,
+      "description": "CAMEL骆驼 城市机能系列 防晒速干抗皱短袖Polo衫 男款",
+      "image_url": "https://file.style3d.com/website/Company/77e73047-045e-477f-8fbb-81341ffc79c9/resource/product/models/20250718104653_8797_CAMEL%E9%AA%86%E9%A9%BC%20%E5%9F%8E%E5%B8%82%E6%9C%BA%E8%83%BD%E7%B3%BB%E5%88%97%20%E9%98%B2%E6%99%92%E9%80%9F%E5%B9%B2%E6%8A%97%E7%9A%B1%E7%9F%AD%E8%A2%96Polo%E8%A1%AB%20%E7%94%B7%E6%AC%BE/thumb.png",
+      "scene": "sports",
+      "category_id": 3,
+      "category": "tops"
+    },
+    "4": {
+      "product_id": 4,
+      "description": "CALVIN KLEIN 简约休闲字母净色纯棉针织短袖T恤 男款",
+      "image_url": "https://file.style3d.com/website/Company/77e73047-045e-477f-8fbb-81341ffc79c9/resource/product/models/20250718104653_8797_CAMEL%E9%AA%86%E9%A9%BC%20%E5%9F%8E%E5%B8%82%E6%9C%BA%E8%83%BD%E7%B3%BB%E5%88%97%20%E9%98%B2%E6%99%92%E9%80%9F%E5%B9%B2%E6%8A%97%E7%9A%B1%E7%9F%AD%E8%A2%96Polo%E8%A1%AB%20%E7%94%B7%E6%AC%BE/thumb.png",
+      "scene": "casual",
+      "category_id": 3,
+      "category": "tops"
+    },
+    "2": {
+      "product_id": 2,
+      "description": "FORHUG 冰丝垂坠纯色基础款方领休闲超宽松短袖衬衫 男女同款",
+      "image_url": "https://file.style3d.com/website/Company/77e73047-045e-477f-8fbb-81341ffc79c9/resource/product/models/20250718104749_4187_FORHUG%20%E5%86%B0%E4%B8%9D%E5%9E%82%E5%9D%A0%E7%BA%AF%E8%89%B2%E5%9F%BA%E7%A1%80%E6%AC%BE%E6%96%B9%E9%A2%86%E4%BC%91%E9%97%B2%E8%B6%85%E5%AE%BD%E6%9D%BE%E7%9F%AD%E8%A2%96%E8%A1%AC%E8%A1%AB%20%E7%94%B7%E5%A5%B3%E5%90%8C%E6%AC%BE/thumb.png",
+      "scene": "casual",
+      "category_id": 4,
+      "category": "tops"
+    }
+  },
+  "id_to_index": {
+    "5": 0,
+    "7": 1,
+    "3": 2,
+    "4": 3,
+    "2": 4
+  },
+  "product_ids": [
+    5,
+    7,
+    3,
+    4,
+    2
+  ]
+}

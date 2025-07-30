@@ -48,7 +48,7 @@ class ProductInfo:
 class UserInput:
     """用户输入数据结构（简化版）"""
     product_id: Optional[int] = None  # 用户选择的商品ID
-    scene: Optional[str] = None       # 目标场景：casual/sport/work/party
+    scene: Optional[str] = None       # 目标场景：casual/sports
 
 
 @dataclass
@@ -74,7 +74,10 @@ class FashionRecommendationAPIV6:
         self.model_path = model_path
         self.model_type = model_type
         self.faiss_index_path = faiss_index_path
-        self.api_base_url = api_base_url or "https://m1.apifoxmock.com/m1/6328147-0-default"
+        # 确保API基础URL包含完整的路径
+        default_api_url = "https://cloudawn3d.com/"
+        self.api_base_url = api_base_url or default_api_url
+        
         self.ssl_verify = True  # SSL证书验证开关
         self.model = None
         self.faiss_index = None
@@ -119,7 +122,13 @@ class FashionRecommendationAPIV6:
         """加载FAISS索引"""
         try:
             logger.info(f"正在加载FAISS索引: {self.faiss_index_path}")
-            self.faiss_index = FAISSVectorStore.load(self.faiss_index_path)
+            # 使用构造函数加载FAISS索引
+            self.faiss_index = FAISSVectorStore(
+                index_name=os.path.splitext(os.path.basename(self.faiss_index_path))[0],
+                faiss_type='IndexFlatIP',
+                base_dir=os.path.dirname(self.faiss_index_path),
+                d_embed=512
+            )
             
             # 加载元数据
             metadata_path = self.faiss_index_path.replace('.faiss', '_metadata.json')
@@ -171,6 +180,8 @@ class FashionRecommendationAPIV6:
     def _call_backend_api(self, endpoint: str, params: dict = None) -> Optional[Dict]:
         """调用后端API"""
         try:
+            logger.info(f"API基础URL: {self.api_base_url}")
+            logger.info(f"Endpoint: {endpoint}")
             url = urljoin(self.api_base_url, endpoint)
             logger.info(f"调用后端API: {url}")
             
@@ -184,7 +195,7 @@ class FashionRecommendationAPIV6:
             response.raise_for_status()
             
             result = response.json()
-            if result.get('code') == 0:  # 假设0表示成功
+            if result.get('code') == 200:  # 200表示成功
                 return result.get('data')
             else:
                 logger.error(f"后端API返回错误: {result.get('message')}")
@@ -199,7 +210,7 @@ class FashionRecommendationAPIV6:
                 response.raise_for_status()
                 
                 result = response.json()
-                if result.get('code') == 0:
+                if result.get('code') == 200:
                     return result.get('data')
                 else:
                     logger.error(f"后端API返回错误: {result.get('message')}")
@@ -218,17 +229,20 @@ class FashionRecommendationAPIV6:
     def _get_product_by_id(self, product_id: int) -> Optional[Dict]:
         """根据商品ID从后端API获取商品信息"""
         try:
-            endpoint = f"/mall/getProductDetail/{product_id}"
+            endpoint = f"mall/getProductDetail/{product_id}"
             product_data = self._call_backend_api(endpoint)
             
             if product_data:
+                # 从预构建的分类索引中获取分类信息
+                category = self.product_category_index.get(product_id, "unknown")
+                
                 # 转换API响应格式为内部格式
                 return {
                     'product_id': product_data.get('id'),
                     'description': product_data.get('description', ''),
                     'image_url': product_data.get('imageUrl', [None])[0] if product_data.get('imageUrl') else None,
                     'scene': product_data.get('scene', ''),
-                    'category_id': product_data.get('categoryId')  # 新增：获取类别ID
+                    'category': category  # 使用预构建的分类索引
                 }
             
             return None
@@ -239,7 +253,7 @@ class FashionRecommendationAPIV6:
     def _get_subcategory_ids(self, parent_id: int) -> List[int]:
         """获取指定父类下的所有子类ID"""
         try:
-            endpoint = "/mall/getSubCategory"
+            endpoint = "mall/getSubCategory"
             params = {'parentId': parent_id}
             
             subcategories = self._call_backend_api(endpoint, params)
@@ -259,7 +273,7 @@ class FashionRecommendationAPIV6:
     def _get_products_by_type_id(self, type_id: int, page: int = 1, page_size: int = 100) -> List[Dict]:
         """根据子类ID获取商品列表"""
         try:
-            endpoint = f"/mall/getProductByTypeId/{type_id}"
+            endpoint = f"mall/getProductByTypeId/{type_id}"
             params = {
                 'page': page,
                 'pageSize': page_size
@@ -379,7 +393,7 @@ class FashionRecommendationAPIV6:
     def _get_products_by_scene(self, scene: str, page: int = 1, page_size: int = 100) -> List[Dict]:
         """根据场景从后端API获取商品列表"""
         try:
-            endpoint = f"/mall/getProductByScene/{scene}"
+            endpoint = f"mall/getProductByScene/{scene}"
             params = {
                 'page': page,
                 'pageSize': page_size
@@ -415,31 +429,38 @@ class FashionRecommendationAPIV6:
             logger.error(f"图片下载失败: {e}")
             raise
     
-    def _preprocess_image(self, image: Image.Image) -> torch.Tensor:
-        """预处理图片"""
-        # 这里需要根据你的模型要求进行图片预处理
-        image = image.resize((224, 224))  # 根据模型要求调整
-        image_tensor = torch.from_numpy(np.array(image)).float()
-        image_tensor = image_tensor.permute(2, 0, 1).unsqueeze(0)  # CHW -> BCHW
-        image_tensor = image_tensor / 255.0  # 归一化到[0,1]
-        return image_tensor
+    def _preprocess_image(self, image: Image.Image) -> np.ndarray:
+        """预处理图片，返回numpy数组格式"""
+        # 调整图片大小到模型要求的尺寸
+        image = image.resize((224, 224))
+        # 转换为numpy数组，保持RGB格式 (H, W, C)
+        image_array = np.array(image)
+        return image_array
     
     def _generate_embedding(self, image: Image.Image, description: str) -> np.ndarray:
-        """生成embedding（只需要图片和description）"""
+        """生成embedding（只需要图片和描述）"""
         try:
             with torch.no_grad():
-                # 图像编码
-                image_tensor = self._preprocess_image(image)
-                image_features = self.model.image_encoder(image_tensor.to(self.device))
+                # 创建FashionItem对象，只需要图片和描述
+                from src.data.datatypes import FashionItem
                 
-                # 文本编码
-                text_features = self.model.text_encoder([description])
+                fashion_item = FashionItem(
+                    image=image,
+                    description=description
+                )
                 
-                # 融合特征
-                combined_features = torch.cat([image_features, text_features], dim=1)
-                embedding = self.model.transformer(combined_features)
+                # 使用模型的embed_item方法
+                embedding = self.model.embed_item([fashion_item], use_precomputed_embedding=False)
                 
-                return embedding.cpu().numpy()
+                # 确保返回的是numpy数组
+                if isinstance(embedding, torch.Tensor):
+                    embedding = embedding.detach().cpu().numpy()
+                
+                # 如果是batch结果，取第一个
+                if embedding.ndim > 1 and embedding.shape[0] == 1:
+                    embedding = embedding[0]
+                
+                return embedding
         except Exception as e:
             logger.error(f"生成embedding失败: {e}")
             raise
@@ -461,11 +482,11 @@ class FashionRecommendationAPIV6:
             save_path = self.faiss_index_path or "faiss_index.faiss"
         
         try:
-            logger.info(f"开始从API构建分类FAISS索引，场景: {scene or 'all'}")
+            logger.info(f"开始从API构建分类FAISS索引")
             
-            # 分别构建上装和下装的索引
-            tops_result = self._build_category_index('tops', scene, save_path)
-            bottoms_result = self._build_category_index('bottoms', scene, save_path)
+            # 分别构建上装和下装的索引（不传入scene参数）
+            tops_result = self._build_category_index('tops', save_path)
+            bottoms_result = self._build_category_index('bottoms', save_path)
             
             total_valid = tops_result + bottoms_result
             logger.info(f"分类FAISS索引构建完成，上装: {tops_result}个，下装: {bottoms_result}个，总计: {total_valid}个")
@@ -476,13 +497,12 @@ class FashionRecommendationAPIV6:
             logger.error(f"构建分类FAISS索引失败: {e}")
             raise
     
-    def _build_category_index(self, category: str, scene: str = None, base_save_path: str = None):
+    def _build_category_index(self, category: str, base_save_path: str = None):
         """
         构建特定分类的FAISS索引
         
         Args:
             category: 分类 ('tops' 或 'bottoms')
-            scene: 场景筛选
             base_save_path: 基础保存路径
         """
         # 确定分类ID
@@ -527,11 +547,6 @@ class FashionRecommendationAPIV6:
             
             logger.info(f"从API获取到 {len(all_products)} 个{category}商品（包含所有子类）")
             
-            # 如果指定了场景，记录日志但不过滤数据
-            if scene:
-                logger.info(f"构建{category}分类索引时指定了场景: {scene}")
-                logger.info("注意：索引将包含所有场景的商品，场景筛选在推荐阶段进行")
-            
             # 生成该分类商品的embedding
             embeddings = []
             valid_products = []
@@ -548,7 +563,7 @@ class FashionRecommendationAPIV6:
                     # 下载图片
                     image = self._download_image(product['image_url'])
                     
-                    # 生成embedding
+                    # 生成embedding（只需要图片和描述）
                     embedding = self._generate_embedding(image, product['description'])
                     embeddings.append(embedding)
                     valid_products.append(product)
@@ -576,15 +591,31 @@ class FashionRecommendationAPIV6:
             
             # 添加到FAISS索引
             embeddings_array = np.array(embeddings)
-            category_index.add(embeddings_array)
+            # 准备商品ID列表
+            product_ids = [product['product_id'] for product in valid_products]
+            # 转换为列表格式
+            embeddings_list = embeddings_array.tolist()
+            category_index.add(embeddings=embeddings_list, ids=product_ids)
+            
+            # 保存商品ID到索引位置的映射
+            id_to_index = {product_id: idx for idx, product_id in enumerate(product_ids)}
             
             # 保存FAISS索引
-            category_index.save(category_save_path)
+            # 临时修改index_path，然后保存
+            original_path = category_index.index_path
+            category_index.index_path = category_save_path
+            category_index.save()
+            category_index.index_path = original_path  # 恢复原始路径
             
-            # 保存元数据
+            # 保存元数据（包含ID到索引的映射）
+            metadata_data = {
+                'metadata': category_metadata,
+                'id_to_index': id_to_index,
+                'product_ids': product_ids
+            }
             metadata_path = category_save_path.replace('.faiss', '_metadata.json')
             with open(metadata_path, 'w', encoding='utf-8') as f:
-                json.dump(category_metadata, f, ensure_ascii=False, indent=2)
+                json.dump(metadata_data, f, ensure_ascii=False, indent=2)
             
             logger.info(f"{category}分类FAISS索引构建完成，保存到: {category_save_path}")
             logger.info(f"{category}有效商品数量: {len(valid_products)}")
@@ -651,14 +682,43 @@ class FashionRecommendationAPIV6:
                 raise ValueError(f"互补分类 {complementary_category} 的FAISS索引不存在: {complementary_index_path}")
             
             # 加载互补分类的FAISS索引
-            complementary_index = FAISSVectorStore(d_embed=512, faiss_type='IndexFlatIP')
-            complementary_index.load(complementary_index_path)
+            # 检查索引文件是否存在
+            if not os.path.exists(complementary_index_path):
+                raise ValueError(f"互补分类 {complementary_category} 的FAISS索引文件不存在: {complementary_index_path}")
+            
+            # 直接使用faiss读取索引
+            import faiss
+            faiss_index = faiss.read_index(complementary_index_path)
+            
+            # 创建FAISSVectorStore包装器
+            complementary_index = FAISSVectorStore(
+                index_name=os.path.splitext(os.path.basename(complementary_index_path))[0],
+                faiss_type='IndexFlatIP',
+                base_dir=os.path.dirname(complementary_index_path),
+                d_embed=512
+            )
+            # 替换内部的index
+            complementary_index.index = faiss_index
             
             # 加载互补分类的元数据
             with open(complementary_metadata_path, 'r', encoding='utf-8') as f:
-                complementary_metadata = json.load(f)
+                metadata_data = json.load(f)
+            
+            # 兼容旧格式和新格式
+            if isinstance(metadata_data, dict) and 'metadata' in metadata_data:
+                # 新格式
+                complementary_metadata = metadata_data['metadata']
+                id_to_index = metadata_data.get('id_to_index', {})
+                product_ids = metadata_data.get('product_ids', [])
+            else:
+                # 旧格式
+                complementary_metadata = metadata_data
+                id_to_index = {}
+                product_ids = []
             
             logger.info(f"加载了 {len(complementary_metadata)} 个{complementary_category}商品的索引")
+            logger.info(f"元数据键: {list(complementary_metadata.keys())}")
+            logger.info(f"商品ID列表: {product_ids}")
             
             # 4. 生成用户单品的embedding
             logger.info("正在生成用户单品的embedding...")
@@ -667,26 +727,47 @@ class FashionRecommendationAPIV6:
             # 5. 在互补分类的FAISS索引中进行检索
             logger.info(f"正在{complementary_category}分类中进行FAISS检索...")
             k = min(100, len(complementary_metadata))  # 检索前100个候选
-            distances, indices = complementary_index.search(user_embedding, k)
+            logger.info(f"检索参数: k={k}, 元数据数量={len(complementary_metadata)}")
+            
+            search_results = complementary_index.search([user_embedding.tolist()], k)
+            logger.info(f"检索结果: {len(search_results)} 个查询结果")
+            
+            # 检查检索结果是否为空
+            if not search_results or len(search_results) == 0:
+                logger.error("FAISS检索返回空结果")
+                raise ValueError("FAISS检索失败，没有返回任何结果")
             
             # 6. 在检索结果中筛选最佳单品
             best_product = None
             best_score = 0.0
             
-            for i, (distance, idx) in enumerate(zip(distances[0], indices[0])):
+            # search_results[0] 是第一个查询的结果列表
+            logger.info(f"第一个查询结果数量: {len(search_results[0])}")
+            
+            # 处理检索结果
+            logger.info(f"FAISS返回的索引: {[idx for _, idx in search_results[0]]}")
+            
+            for score, idx in search_results[0]:
                 if idx == -1:  # FAISS返回-1表示无效索引
                     continue
                 
+                # FAISS返回的索引就是商品ID本身，直接使用
+                candidate_product_id = idx
+                logger.info(f"FAISS索引 {idx} 对应商品ID: {candidate_product_id}")
+                
                 # 获取候选商品信息
-                candidate_product_id = list(complementary_metadata.keys())[idx]
-                candidate_product = complementary_metadata[candidate_product_id]
+                if str(candidate_product_id) not in complementary_metadata:
+                    logger.warning(f"商品ID {candidate_product_id} 不在元数据中，跳过")
+                    continue
+                    
+                candidate_product = complementary_metadata[str(candidate_product_id)]
                 
                 # 场景筛选：如果指定了目标场景，只选择符合场景的商品
                 if user_input.scene and candidate_product['scene'] != user_input.scene:
                     continue
                 
                 # 计算相似度分数
-                score = float(distance)  # 对于IndexFlatIP，距离就是相似度
+                score = float(score)  # 对于IndexFlatIP，距离就是相似度
                 
                 # 更新最佳单品（取最相似的）
                 if score > best_score:
@@ -752,18 +833,3 @@ class FashionRecommendationAPIV6:
         }
         
         return info
-
-
-def create_recommendation_api_v6(
-    model_path: str, 
-    model_type: str = 'clip',
-    faiss_index_path: str = None,
-    api_base_url: str = None
-) -> FashionRecommendationAPIV6:
-    """创建推荐API实例"""
-    return FashionRecommendationAPIV6(
-        model_path=model_path,
-        model_type=model_type,
-        faiss_index_path=faiss_index_path,
-        api_base_url=api_base_url
-    ) 

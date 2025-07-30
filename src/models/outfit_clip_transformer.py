@@ -11,7 +11,7 @@ import numpy as np
 class OutfitCLIPTransformerConfig(OutfitTransformerConfig):
     """Chinese-CLIP Transformer 专用配置"""
     # Chinese-CLIP 模型名称
-    item_enc_model_name: str = "OFA-Sys/chinese-clip-vit-base-patch16"
+    item_enc_model_name: str = "/root/outfit-transformer-api/outfit-transformer/OFA-Sys/chinese-clip-vit-base-patch16"
     # Chinese-CLIP 每个模态的输出维度（图像和文本各512维）
     item_enc_dim_per_modality: int = 512
     # 强制使用 concat 聚合方法，确保维度一致性

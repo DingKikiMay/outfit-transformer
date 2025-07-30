@@ -17,10 +17,6 @@ pandas>=1.3.0
 # 机器学习
 scikit-learn>=1.0.0
 
-# 中文CLIP模型
-transformers>=4.20.0
-chinese-clip>=1.2.0
-
 # 工具库
 tqdm>=4.62.0
 requests>=2.25.0

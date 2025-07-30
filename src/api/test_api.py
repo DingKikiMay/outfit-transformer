@@ -10,126 +10,146 @@ import time
 from typing import Dict, Any
 
 class APITester:
-    def __init__(self, base_url: str = "http://localhost:5000"):
+    def __init__(self, base_url: str = "http://localhost:6006"):
         self.base_url = base_url
         self.session = requests.Session()
     
-    def test_health(self) -> bool:
-        """测试健康检查接口"""
+    def test_build_faiss_index(self, scene: str = None) -> bool:
+        """测试构建FAISS索引接口"""
         try:
-            response = self.session.get(f"{self.base_url}/health")
-            print(f"健康检查: {response.status_code}")
+            print("=" * 60)
+            print("测试构建FAISS索引接口")
+            print("=" * 60)
+            
+            data = {}
+            if scene:
+                data['scene'] = scene
+            
+            response = self.session.post(
+                f"{self.base_url}/api/build_faiss_index_from_api",
+                json=data,
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            print(f"状态码: {response.status_code}")
+            print(f"响应: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
+            
             if response.status_code == 200:
-                data = response.json()
-                print(f"API状态: {data.get('status')}")
-                print(f"消息: {data.get('message')}")
-                return True
+                result = response.json()
+                if result.get('code') == 200 and result.get('success'):
+                    print("构建FAISS索引成功")
+                    return True
+                else:
+                    print("构建FAISS索引失败")
+                    return False
             else:
-                print(f"健康检查失败: {response.text}")
+                print("构建FAISS索引失败")
                 return False
+                
         except Exception as e:
-            print(f"健康检查异常: {e}")
-            return False
-    
-    def test_api_info(self) -> bool:
-        """测试API信息接口"""
-        try:
-            response = self.session.get(f"{self.base_url}/api_info")
-            print(f"API信息: {response.status_code}")
-            if response.status_code == 200:
-                data = response.json()
-                print(f"API信息: {json.dumps(data, indent=2, ensure_ascii=False)}")
-                return True
-            else:
-                print(f"API信息获取失败: {response.text}")
-                return False
-        except Exception as e:
-            print(f"API信息异常: {e}")
+            print(f"构建FAISS索引异常: {e}")
             return False
     
     def test_recommendation(self, product_id: int = 1, scene: str = "casual") -> bool:
         """测试推荐接口"""
         try:
-            payload = {
-                "product_id": product_id,
-                "scene": scene
+            print("=" * 60)
+            print("测试推荐接口")
+            print("=" * 60)
+            
+            data = {
+                'product_id': product_id,
+                'scene': scene
             }
+            
             response = self.session.post(
                 f"{self.base_url}/api/recommend_best_item",
-                json=payload,
-                headers={"Content-Type": "application/json"}
+                json=data,
+                headers={'Content-Type': 'application/json'}
             )
-            print(f"推荐测试: {response.status_code}")
+            
+            print(f"状态码: {response.status_code}")
+            print(f"响应: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
+            
             if response.status_code == 200:
-                data = response.json()
-                print(f"推荐结果: {json.dumps(data, indent=2, ensure_ascii=False)}")
-                return True
+                result = response.json()
+                if result.get('code') == 200 and result.get('success'):
+                    print("推荐成功")
+                    return True
+                else:
+                    print("推荐失败")
+                    return False
             else:
-                print(f"推荐测试失败: {response.text}")
+                print("推荐失败")
                 return False
+                
         except Exception as e:
-            print(f"推荐测试异常: {e}")
+            print(f"推荐异常: {e}")
             return False
     
-    def test_build_index(self, scene: str = None) -> bool:
-        """测试构建索引接口"""
-        try:
-            payload = {
-                "scene": scene
-            }
-            response = self.session.post(
-                f"{self.base_url}/api/build_faiss_index_from_api",
-                json=payload,
-                headers={"Content-Type": "application/json"}
-            )
-            print(f"构建索引: {response.status_code}")
-            if response.status_code == 200:
-                data = response.json()
-                print(f"索引构建结果: {json.dumps(data, indent=2, ensure_ascii=False)}")
-                return True
-            else:
-                print(f"索引构建失败: {response.text}")
-                return False
-        except Exception as e:
-            print(f"索引构建异常: {e}")
-            return False
-    
-    def run_all_tests(self):
-        """运行所有测试"""
-        print("=== 开始API测试 ===")
+    def run_full_test(self):
+        """运行完整测试"""
+        print("开始API测试")
         print(f"测试地址: {self.base_url}")
+        print("=" * 60)
         
-        tests = [
-            ("健康检查", self.test_health),
-            ("API信息", self.test_api_info),
-            ("推荐测试", lambda: self.test_recommendation(1, "casual")),
-            ("构建索引", lambda: self.test_build_index("casual")),
-        ]
+        # 测试构建FAISS索引
+        print("\n1. 测试构建FAISS索引（所有场景）")
+        build_success = self.test_build_faiss_index()
         
-        results = []
-        for test_name, test_func in tests:
-            print(f"\n--- {test_name} ---")
-            try:
-                result = test_func()
-                results.append((test_name, result))
-                time.sleep(1)  # 避免请求过快
-            except Exception as e:
-                print(f"{test_name} 测试异常: {e}")
-                results.append((test_name, False))
+        if not build_success:
+            print("FAISS索引构建失败，跳过推荐测试")
+            return False
         
-        print("\n=== 测试结果汇总 ===")
-        for test_name, result in results:
-            status = "✓ 通过" if result else "✗ 失败"
-            print(f"{test_name}: {status}")
+        # 等待一下，确保索引构建完成
+        print("等待索引构建完成...")
+        time.sleep(2)
         
-        passed = sum(1 for _, result in results if result)
-        total = len(results)
-        print(f"\n总体结果: {passed}/{total} 测试通过")
+        # 测试推荐接口
+        print("\n2. 测试推荐接口")
+        recommend_success = self.test_recommendation(product_id=1, scene="casual")
+        
+        # 测试不同场景
+        print("\n3. 测试不同场景推荐")
+        recommend_success2 = self.test_recommendation(product_id=2, scene="sports")
+        
+        # 总结
+        print("\n" + "=" * 60)
+        print("测试结果总结")
+        print("=" * 60)
+        print(f"构建FAISS索引: {'成功' if build_success else '失败'}")
+        print(f"推荐接口(casual): {'成功' if recommend_success else '失败'}")
+        print(f"推荐接口(sports): {'成功' if recommend_success2 else '失败'}")
+        
+        overall_success = build_success and recommend_success and recommend_success2
+        print(f"\n总体结果: {'全部通过' if overall_success else '部分失败'}")
+        
+        return overall_success
+
+
+def main():
+    """主函数"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='API测试脚本')
+    parser.add_argument('--url', type=str, default='http://localhost:6006', 
+                       help='API服务器地址')
+    parser.add_argument('--product-id', type=int, default=1,
+                       help='测试用的商品ID')
+    parser.add_argument('--scene', type=str, default='casual',
+                       help='测试用的场景')
+    
+    args = parser.parse_args()
+    
+    # 创建测试器
+    tester = APITester(args.url)
+    
+    # 运行测试
+    success = tester.run_full_test()
+    
+    # 退出码
+    exit(0 if success else 1)
+
 
 if __name__ == '__main__':
-    # 可以通过命令行参数指定服务器地址
-    import sys
-    base_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:5000"
-    
-    tester = APITester(base_url)
-    tester.run_all_tests() 
+    main() 
